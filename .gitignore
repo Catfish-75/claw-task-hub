@@ -1,0 +1,33 @@
+# Logs
+logs
+*.log
+.codex-tmp-*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+data
+test-results
+playwright-report
+.playwright-cli
+.gstack
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

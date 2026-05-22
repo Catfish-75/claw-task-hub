@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security policy
+    url: https://github.com/Catfish-75/claw-task-hub/security/policy
+    about: Report security-sensitive issues through the security policy.

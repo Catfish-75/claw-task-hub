@@ -1,0 +1,20 @@
+## Claw Task Hub Project Instructions
+
+- Product name: Claw Task Hub.
+- This repository is a local-first, Linear-like task hub designed primarily for AI agents and agentic harnesses.
+- Keep the product universal across harnesses. Codex, Claude Code, OpenClaw, Hermes, and similar runners are examples, not the only supported target.
+- Use relative repository paths in documentation and code examples. Do not commit machine-specific install paths, LAN addresses, proxy settings, VPN settings, or user names.
+- Default API behavior must remain local-only. Non-loopback binding requires an explicit unsafe flag and must be documented as unsupported for public deployment without additional authentication.
+- The default local database is under `data/`; generated SQLite files, logs, screenshots, reports, and scratch files must stay untracked.
+- Linear is retired for active work. Do not connect to Linear, refresh Linear imports, or use Linear as a fallback during normal Claw Task Hub work.
+- Retired Linear migration must stay in the standalone operator tool and must not appear in normal API, CLI, or MCP runtime paths.
+- Run core checks before release-oriented changes are considered done:
+  - `npm run build`
+  - `npm run lint`
+  - `npm run store-regression`
+  - `npm run harness-smoke`
+  - `npm run ui-smoke`
+  - `npm run public-hygiene`
+- Use `docs/AGENTIC_HARNESS.md` as the canonical agent and harness contract.
+- Use visible issue identifiers such as `CTH-272`, `LOCAL-1`, or imported historical identifiers in conversation and tool calls.
+- Do not store secrets in issues, comments, docs, tests, fixtures, or screenshots.
