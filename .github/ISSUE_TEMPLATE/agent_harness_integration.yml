@@ -1,0 +1,53 @@
+name: Agent harness integration
+description: Report or propose an integration path for an AI agent harness.
+title: "[Harness]: "
+labels:
+  - integration
+  - agentic-harness
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for Codex, Claude Code, OpenClaw, Hermes, MCP, or other agentic harness integration work. Do not include secrets, real tokens, private paths, customer data, or private network details.
+  - type: input
+    id: harness
+    attributes:
+      label: Harness or agent runtime
+      description: Which harness are you trying to connect?
+      placeholder: Codex, Claude Code, OpenClaw, Hermes, custom MCP runner, etc.
+    validations:
+      required: true
+  - type: dropdown
+    id: integration_surface
+    attributes:
+      label: Integration surface
+      options:
+        - MCP tools
+        - CLI fallback
+        - HTTP API
+        - UI/operator workflow
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Desired agent workflow
+      description: Describe the project, issue, session, claim, comment, or acceptance-trail flow you need.
+      placeholder: |
+        The agent should discover open issues, claim one, write progress comments, release the claim, and close only after verification.
+    validations:
+      required: true
+  - type: textarea
+    id: current_gap
+    attributes:
+      label: Current gap or failure
+      description: What is missing, confusing, or not working today?
+    validations:
+      required: true
+  - type: textarea
+    id: contract_details
+    attributes:
+      label: Tool or payload details
+      description: Include sanitized tool names, payload shape, status semantics, or command examples if relevant.

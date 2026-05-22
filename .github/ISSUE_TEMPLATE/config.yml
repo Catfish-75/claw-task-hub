@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Launch discussion and feedback
+    url: https://github.com/Catfish-75/claw-task-hub/discussions
+    about: Share general feedback, agent workflow ideas, and launch discussion replies.
   - name: Security policy
     url: https://github.com/Catfish-75/claw-task-hub/security/policy
     about: Report security-sensitive issues through the security policy.

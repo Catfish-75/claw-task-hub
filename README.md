@@ -164,7 +164,12 @@ npm run public-hygiene
 
 - Agent and harness contract: [docs/AGENTIC_HARNESS.md](docs/AGENTIC_HARNESS.md)
 - Optional legacy Linear migration: [docs/LINEAR_MIGRATION.md](docs/LINEAR_MIGRATION.md)
+- Launch kit and announcement drafts: [docs/LAUNCH.md](docs/LAUNCH.md)
 - Public release readiness: [docs/GITHUB_OSS_READINESS.md](docs/GITHUB_OSS_READINESS.md)
 - MVP acceptance: [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Security: [SECURITY.md](SECURITY.md)
+
+## Feedback
+
+Use GitHub Discussions for general feedback, agent workflow ideas, and integration notes. Use issues for reproducible bugs, feature requests, and harness integration work.
