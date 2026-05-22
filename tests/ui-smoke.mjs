@@ -61,7 +61,7 @@ function spawnNpmSync(args, options) {
 
 function spawnNpm(args, options) {
   if (process.platform !== "win32") {
-    return spawn("npm", args, options);
+    return spawn("npm", args, { ...options, detached: true });
   }
   return spawn(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", npmCommand(args)], {
     ...options,
@@ -123,10 +123,15 @@ async function ensureProcess(url, args, extraEnv = {}) {
 
 function cleanup() {
   for (const child of spawned) {
+    if (!child.pid) continue;
     if (process.platform === "win32") {
       spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" });
     } else {
-      child.kill("SIGTERM");
+      try {
+        process.kill(-child.pid, "SIGTERM");
+      } catch {
+        child.kill("SIGTERM");
+      }
     }
   }
   rmSync(tempDir, { recursive: true, force: true });
