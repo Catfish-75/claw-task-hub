@@ -255,7 +255,7 @@ export function listIssues(filters: { project?: string; project_id?: string; tea
     where.push(inClause(normalizedIssueStatusTypeSql, "status_type_filter", normalized, params));
   }
   if (!booleanValue(filters.include_done, true)) {
-    where.push(`${normalizedIssueStatusTypeSql} != 'completed'`);
+    where.push(`${normalizedIssueStatusTypeSql} NOT IN ('completed', 'canceled')`);
   }
   let sql = `
     SELECT i.*, p.name AS project_name, t.name AS team_name

@@ -213,14 +213,16 @@ try {
   const projectDone = upsertIssue({ title: "Project completed filter target", identifier: "CTH-900008", status: "Done", project_id: filterProject.id });
   const projectStarted = upsertIssue({ title: "Project active filter target", identifier: "CTH-900009", status: "In Progress", project_id: filterProject.id });
   const projectBacklog = upsertIssue({ title: "Project backlog filter target", identifier: "CTH-900010", status: "Backlog", project_id: filterProject.id });
+  const projectCanceled = upsertIssue({ title: "Project canceled filter target", identifier: "CTH-900018", status: "Canceled", project_id: filterProject.id });
   const projectActiveOnly = listIssues({ project_id: filterProject.id, include_done: false, limit: 20 });
   const projectActiveIds = new Set(projectActiveOnly.map((issue) => issue.identifier));
   assert(projectActiveIds.has(projectStarted.identifier), "include_done:false missed a project active issue");
   assert(projectActiveIds.has(projectBacklog.identifier), "include_done:false missed a project backlog issue");
   assert(!projectActiveIds.has(projectDone.identifier), "include_done:false included a project completed issue");
-  assert(projectActiveOnly.every((issue) => issue.status_type !== "completed"), "include_done:false returned completed status_type in project scope");
+  assert(!projectActiveIds.has(projectCanceled.identifier), "include_done:false included a project canceled issue");
+  assert(projectActiveOnly.every((issue) => !["completed", "canceled"].includes(issue.status_type)), "include_done:false returned inactive status_type in project scope");
   const globalActiveOnly = listIssues({ include_done: false, limit: 250 });
-  assert(globalActiveOnly.every((issue) => issue.status_type !== "completed"), "include_done:false returned completed status_type globally");
+  assert(globalActiveOnly.every((issue) => !["completed", "canceled"].includes(issue.status_type)), "include_done:false returned inactive status_type globally");
   const mixedActiveOnly = listIssues({ project_id: filterProject.id, status_type: ["backlog", "started"], include_done: false, limit: 20 });
   const mixedActiveIds = new Set(mixedActiveOnly.map((issue) => issue.identifier));
   assert(mixedActiveIds.has(projectStarted.identifier), "status_type array with include_done:false missed started issue");
@@ -228,6 +230,10 @@ try {
   assert(!mixedActiveIds.has(projectDone.identifier), "status_type array with include_done:false included completed issue");
   const noCompleted = listIssues({ project_id: filterProject.id, status_type: ["completed"], include_done: false, limit: 20 });
   assert(noCompleted.length === 0, "include_done:false did not win over explicit completed status_type");
+  const noCanceled = listIssues({ project_id: filterProject.id, status_type: ["canceled"], include_done: false, limit: 20 });
+  assert(noCanceled.length === 0, "include_done:false did not exclude explicit canceled status_type");
+  const canceledOnly = listIssues({ project_id: filterProject.id, status_type: ["canceled"], limit: 20 });
+  assert(canceledOnly.some((issue) => issue.id === projectCanceled.id), "canceled issues are not discoverable through explicit status_type filter");
 
   const oldComment = saveComment({ issue_id: created.id, body: "Older null external id comment", author: "Test" });
   const visibleComment = saveComment({ issue_id: "SAV-900001", body: "Visible identifier comment", author: "Agent" });
