@@ -9,6 +9,7 @@ mkdirSync(dataDir, { recursive: true });
 
 const legacyDbPath = join(dataDir, "codex-task-hub.sqlite");
 const clawDbPath = join(dataDir, "claw-task-hub.sqlite");
+type SqliteDatabase = InstanceType<typeof Database>;
 
 export function resolveDbPath(env: NodeJS.ProcessEnv = process.env, legacyExists = existsSync(legacyDbPath)) {
   const defaultDbPath = legacyExists ? legacyDbPath : clawDbPath;
@@ -19,12 +20,21 @@ export const dbPath = resolveDbPath();
 mkdirSync(dirname(dbPath), { recursive: true });
 export const db = new Database(dbPath);
 
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
-db.pragma("synchronous = NORMAL");
-db.pragma("busy_timeout = 5000");
+export function initializeDatabase(database: SqliteDatabase) {
+  configureDatabase(database);
+  createSchema(database);
+  return runMigrations(database);
+}
 
-db.exec(`
+function configureDatabase(database: SqliteDatabase) {
+  database.pragma("journal_mode = WAL");
+  database.pragma("foreign_keys = ON");
+  database.pragma("synchronous = NORMAL");
+  database.pragma("busy_timeout = 5000");
+}
+
+function createSchema(database: SqliteDatabase) {
+  database.exec(`
 CREATE TABLE IF NOT EXISTS teams (
   id TEXT PRIMARY KEY,
   external_id TEXT UNIQUE,
@@ -166,6 +176,85 @@ CREATE INDEX IF NOT EXISTS idx_agent_sessions_status_expires ON agent_sessions(s
 CREATE INDEX IF NOT EXISTS idx_issue_claims_issue_active ON issue_claims(issue_id, released_at, expires_at);
 CREATE INDEX IF NOT EXISTS idx_issue_claims_session ON issue_claims(session_id, released_at);
 `);
+}
+
+const migrations: {
+  id: string;
+  description: string;
+  up: (database: SqliteDatabase) => void;
+}[] = [
+  {
+    id: "0001_baseline_schema",
+    description: "Record the bootstrap schema managed by server/db.ts",
+    up: (database) => {
+      database.exec("INSERT INTO issue_fts(issue_fts) VALUES('rebuild')");
+    },
+  },
+];
+
+export function runMigrations(database: SqliteDatabase = db) {
+  ensureSchemaMigrationsTable(database);
+  const applied: string[] = [];
+  const tx = database.transaction(() => {
+    normalizeLegacyMigrationRows(database);
+    const exists = database.prepare("SELECT 1 FROM schema_migrations WHERE id = @id");
+    const record = database.prepare(`
+      INSERT INTO schema_migrations (id, name, applied_at)
+      VALUES (@id, @name, @applied_at)
+    `);
+    for (const migration of migrations) {
+      if (exists.get({ id: migration.id })) continue;
+      migration.up(database);
+      record.run({ id: migration.id, name: migration.description, applied_at: nowIso() });
+      applied.push(migration.id);
+    }
+  });
+  tx.immediate();
+  return { applied, current: migrations.at(-1)?.id ?? null };
+}
+
+function ensureSchemaMigrationsTable(database: SqliteDatabase) {
+  database.exec(`
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  applied_at TEXT NOT NULL
+);
+  `);
+  const columns = database.prepare("PRAGMA table_info(schema_migrations)").all() as { name: string }[];
+  if (!columns.some((column) => column.name === "name")) {
+    try {
+      database.exec("ALTER TABLE schema_migrations ADD COLUMN name TEXT");
+    } catch (error) {
+      if (!isDuplicateColumnError(error)) throw error;
+    }
+    if (columns.some((column) => column.name === "description")) {
+      database.exec("UPDATE schema_migrations SET name = description WHERE name IS NULL");
+    }
+  }
+}
+
+function normalizeLegacyMigrationRows(database: SqliteDatabase) {
+  database.prepare(`
+    UPDATE schema_migrations
+    SET id = '0001_baseline_schema',
+        name = COALESCE(name, 'Record the bootstrap schema managed by server/db.ts')
+    WHERE id = '0001_bootstrap_schema'
+      AND NOT EXISTS (SELECT 1 FROM schema_migrations WHERE id = '0001_baseline_schema')
+  `).run();
+  database.prepare(`
+    DELETE FROM schema_migrations
+    WHERE id = '0001_bootstrap_schema'
+      AND EXISTS (SELECT 1 FROM schema_migrations WHERE id = '0001_baseline_schema')
+  `).run();
+}
+
+function isDuplicateColumnError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.toLowerCase().includes("duplicate column name");
+}
+
+initializeDatabase(db);
 
 export function nowIso() {
   return new Date().toISOString();

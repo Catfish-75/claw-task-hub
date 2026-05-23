@@ -9,6 +9,7 @@ The system should be useful to Codex, Claude Code, OpenClaw, Hermes, and other a
 ## Must Pass
 
 - Local SQLite database initializes from an empty checkout without manual setup.
+- SQLite schema versions are recorded in `schema_migrations`; rerunning migrations is idempotent on fresh and existing local databases.
 - SQLite uses WAL mode, indexes, and FTS5 search suitable for 250k+ issues.
 - Projects, teams, issues, comments, documents, sync runs, and checkpoints have stable local IDs plus optional external IDs.
 - Replayed or mirrored writes are idempotent: external IDs update rows instead of creating duplicates.

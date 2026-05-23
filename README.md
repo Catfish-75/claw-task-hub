@@ -127,6 +127,8 @@ Some existing local hosts may still use the compatibility MCP server id `codex_t
 
 Claw Task Hub uses SQLite with WAL mode, indexes, and FTS5 search.
 
+Schema initialization is deterministic. `server/db.ts` creates the bootstrap schema and records applied versions in the `schema_migrations` table. The first migration, `0001_baseline_schema`, is a baseline record for the current schema. Future schema changes should be added as explicit migrations and must be idempotent on existing local databases.
+
 Default database paths:
 
 - New installs: `data/claw-task-hub.sqlite`

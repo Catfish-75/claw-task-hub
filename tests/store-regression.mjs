@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -27,7 +28,7 @@ try {
     upsertProject,
     upsertTeam,
   } = await import("../server/store.ts");
-  const { db, dbPath, resolveDbPath } = await import("../server/db.ts");
+  const { db, dbPath, initializeDatabase, resolveDbPath, runMigrations } = await import("../server/db.ts");
   assert(dbPath === process.env.CLAW_TASK_HUB_DB, `CLAW_TASK_HUB_DB did not select the test DB: ${dbPath}`);
   assert(
     resolveDbPath({ CODEX_TASK_HUB_DB: join(tempDir, "legacy-env.sqlite") }, false) === join(tempDir, "legacy-env.sqlite"),
@@ -41,6 +42,52 @@ try {
     resolveDbPath({}, false).endsWith("claw-task-hub.sqlite"),
     "Fresh installs should default to claw-task-hub.sqlite",
   );
+  const migrationColumns = db.prepare("PRAGMA table_info(schema_migrations)").all().map((row) => row.name);
+  assert(migrationColumns.includes("name"), "schema_migrations does not expose the migration name column");
+  const appliedMigrations = db.prepare("SELECT id FROM schema_migrations ORDER BY id").all().map((row) => row.id);
+  assert(appliedMigrations.includes("0001_baseline_schema"), "default DB did not record the baseline schema migration");
+  assert(runMigrations().applied.length === 0, "default DB migrations are not idempotent");
+
+  const freshMigrationDb = new Database(join(tempDir, "fresh-migration.sqlite"));
+  try {
+    const freshMigration = initializeDatabase(freshMigrationDb);
+    assert(freshMigration.applied.includes("0001_baseline_schema"), "fresh DB did not apply the baseline migration");
+    assert(freshMigrationDb.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count === 1, "fresh DB stored the wrong migration count");
+    assert(runMigrations(freshMigrationDb).applied.length === 0, "fresh DB migration rerun was not a no-op");
+  } finally {
+    freshMigrationDb.close();
+  }
+
+  const existingMigrationDb = new Database(join(tempDir, "existing-migration.sqlite"));
+  try {
+    existingMigrationDb.exec("CREATE TABLE preserved_marker (id TEXT PRIMARY KEY); INSERT INTO preserved_marker (id) VALUES ('keep-me');");
+    const existingMigration = initializeDatabase(existingMigrationDb);
+    assert(existingMigration.applied.includes("0001_baseline_schema"), "existing DB did not record the baseline migration");
+    const marker = existingMigrationDb.prepare("SELECT id FROM preserved_marker").get();
+    assert(marker.id === "keep-me", "existing DB initialization did not preserve pre-existing data");
+    assert(runMigrations(existingMigrationDb).applied.length === 0, "existing DB migration rerun was not a no-op");
+    existingMigrationDb.prepare(`
+      INSERT INTO issues (id, identifier, title, description, status, status_type, priority, labels, source, created_at, updated_at)
+      VALUES ('premigration_fts_issue', 'CTH-900019', 'Premigration searchable issue', 'Needs FTS rebuild during baseline migration.', 'Todo', 'unstarted', 3, '[]', 'local', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+    `).run();
+    existingMigrationDb.prepare(`
+      INSERT INTO comments (id, issue_id, body, author, source, created_at, updated_at)
+      VALUES ('premigration_comment', 'premigration_fts_issue', 'Preserve this existing comment.', 'Test', 'local', '2026-01-01T00:00:01.000Z', '2026-01-01T00:00:01.000Z')
+    `).run();
+    existingMigrationDb.prepare(`
+      INSERT INTO issue_fts(issue_fts, rowid, title, description)
+      SELECT 'delete', rowid, title, coalesce(description, '') FROM issues WHERE id = 'premigration_fts_issue'
+    `).run();
+    assert(existingMigrationDb.prepare("SELECT COUNT(*) AS count FROM issue_fts WHERE issue_fts MATCH 'Premigration'").get().count === 0, "FTS corruption setup did not remove the issue");
+    existingMigrationDb.prepare("DELETE FROM schema_migrations").run();
+    const ftsRepairMigration = runMigrations(existingMigrationDb);
+    assert(ftsRepairMigration.applied.includes("0001_baseline_schema"), "baseline migration did not rerun on a pre-metadata DB");
+    assert(existingMigrationDb.prepare("SELECT COUNT(*) AS count FROM issues WHERE id = 'premigration_fts_issue'").get().count === 1, "baseline migration did not preserve an existing issue");
+    assert(existingMigrationDb.prepare("SELECT COUNT(*) AS count FROM comments WHERE id = 'premigration_comment'").get().count === 1, "baseline migration did not preserve an existing comment");
+    assert(existingMigrationDb.prepare("SELECT COUNT(*) AS count FROM issue_fts WHERE issue_fts MATCH 'Premigration'").get().count === 1, "baseline migration did not rebuild FTS for pre-existing issues");
+  } finally {
+    existingMigrationDb.close();
+  }
   ensureDefaultTeam();
 
   const created = upsertIssue({
