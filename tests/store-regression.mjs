@@ -7,6 +7,10 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function indexExists(database, name) {
+  return Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = @name").get({ name }));
+}
+
 const tempDir = mkdtempSync(join(tmpdir(), "claw-task-hub-store-"));
 process.env.CLAW_TASK_HUB_DB = join(tempDir, "test.sqlite");
 
@@ -46,16 +50,41 @@ try {
   assert(migrationColumns.includes("name"), "schema_migrations does not expose the migration name column");
   const appliedMigrations = db.prepare("SELECT id FROM schema_migrations ORDER BY id").all().map((row) => row.id);
   assert(appliedMigrations.includes("0001_baseline_schema"), "default DB did not record the baseline schema migration");
+  assert(appliedMigrations.includes("0002_comments_issue_created_index"), "default DB did not record the comments index migration");
+  assert(indexExists(db, "idx_comments_issue_created"), "default DB did not create the comments issue/date index");
   assert(runMigrations().applied.length === 0, "default DB migrations are not idempotent");
 
   const freshMigrationDb = new Database(join(tempDir, "fresh-migration.sqlite"));
   try {
     const freshMigration = initializeDatabase(freshMigrationDb);
     assert(freshMigration.applied.includes("0001_baseline_schema"), "fresh DB did not apply the baseline migration");
-    assert(freshMigrationDb.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count === 1, "fresh DB stored the wrong migration count");
+    assert(freshMigration.applied.includes("0002_comments_issue_created_index"), "fresh DB did not apply the comments index migration");
+    assert(freshMigrationDb.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count === 2, "fresh DB stored the wrong migration count");
+    assert(indexExists(freshMigrationDb, "idx_comments_issue_created"), "fresh DB did not create the comments issue/date index");
     assert(runMigrations(freshMigrationDb).applied.length === 0, "fresh DB migration rerun was not a no-op");
   } finally {
     freshMigrationDb.close();
+  }
+
+  const legacyMigrationDb = new Database(join(tempDir, "legacy-migration.sqlite"));
+  try {
+    legacyMigrationDb.exec(`
+      CREATE TABLE schema_migrations (
+        id TEXT PRIMARY KEY,
+        description TEXT NOT NULL,
+        applied_at TEXT NOT NULL
+      );
+      INSERT INTO schema_migrations (id, description, applied_at)
+      VALUES ('0001_baseline_schema', 'Record the bootstrap schema managed by server/db.ts', '2026-01-01T00:00:00.000Z');
+    `);
+    const legacyMigration = initializeDatabase(legacyMigrationDb);
+    assert(legacyMigration.applied.includes("0002_comments_issue_created_index"), "legacy migration table did not accept the comments index migration");
+    const legacyRows = legacyMigrationDb.prepare("SELECT id, name, description FROM schema_migrations ORDER BY id").all();
+    assert(legacyRows.length === 2, `legacy migration table stored wrong row count: ${legacyRows.length}`);
+    assert(legacyRows.every((row) => row.name && row.description), "legacy migration table has incomplete name/description values");
+    assert(indexExists(legacyMigrationDb, "idx_comments_issue_created"), "legacy DB did not create the comments issue/date index");
+  } finally {
+    legacyMigrationDb.close();
   }
 
   const existingMigrationDb = new Database(join(tempDir, "existing-migration.sqlite"));
@@ -63,6 +92,8 @@ try {
     existingMigrationDb.exec("CREATE TABLE preserved_marker (id TEXT PRIMARY KEY); INSERT INTO preserved_marker (id) VALUES ('keep-me');");
     const existingMigration = initializeDatabase(existingMigrationDb);
     assert(existingMigration.applied.includes("0001_baseline_schema"), "existing DB did not record the baseline migration");
+    assert(existingMigration.applied.includes("0002_comments_issue_created_index"), "existing DB did not apply the comments index migration");
+    assert(indexExists(existingMigrationDb, "idx_comments_issue_created"), "existing DB did not create the comments issue/date index");
     const marker = existingMigrationDb.prepare("SELECT id FROM preserved_marker").get();
     assert(marker.id === "keep-me", "existing DB initialization did not preserve pre-existing data");
     assert(runMigrations(existingMigrationDb).applied.length === 0, "existing DB migration rerun was not a no-op");
@@ -82,6 +113,7 @@ try {
     existingMigrationDb.prepare("DELETE FROM schema_migrations").run();
     const ftsRepairMigration = runMigrations(existingMigrationDb);
     assert(ftsRepairMigration.applied.includes("0001_baseline_schema"), "baseline migration did not rerun on a pre-metadata DB");
+    assert(ftsRepairMigration.applied.includes("0002_comments_issue_created_index"), "comments index migration did not rerun on a pre-metadata DB");
     assert(existingMigrationDb.prepare("SELECT COUNT(*) AS count FROM issues WHERE id = 'premigration_fts_issue'").get().count === 1, "baseline migration did not preserve an existing issue");
     assert(existingMigrationDb.prepare("SELECT COUNT(*) AS count FROM comments WHERE id = 'premigration_comment'").get().count === 1, "baseline migration did not preserve an existing comment");
     assert(existingMigrationDb.prepare("SELECT COUNT(*) AS count FROM issue_fts WHERE issue_fts MATCH 'Premigration'").get().count === 1, "baseline migration did not rebuild FTS for pre-existing issues");
@@ -344,10 +376,38 @@ try {
   const forcedClaim = claimIssue({ issue_id: "CTH-900006", session_id: "session-agent-b", force: true, note: "takeover" });
   assert(forcedClaim.forced === true, "force claim did not report forced takeover");
   assert(forcedClaim.claim.agent_name === "Agent B", "force claim did not move ownership to Agent B");
+  const acceptanceComment = saveComment({
+    issue_id: "CTH-900006",
+    body: "Acceptance reached for agent claim state visibility in API payloads.",
+    author: "Agent B",
+    created_at: "2026-01-02T00:00:00.000Z",
+    updated_at: "2026-01-02T00:00:00.000Z",
+  });
+  saveComment({
+    issue_id: "CTH-900006",
+    body: "Progress: the UI mentions an acceptance comment field, but this is not an acceptance decision.",
+    author: "Agent B",
+    created_at: "2026-01-02T00:00:01.000Z",
+    updated_at: "2026-01-02T00:00:01.000Z",
+  });
+  const listedClaimTarget = listIssues({ limit: 250 }).find((issue) => issue.identifier === "CTH-900006");
+  assert(listedClaimTarget, "listIssues did not return the agent claim target");
+  assert(Number(listedClaimTarget.active_claim_count) === 1, `listIssues active_claim_count was wrong: ${listedClaimTarget.active_claim_count}`);
+  assert(listedClaimTarget.active_claim_agent === "Agent B", `listIssues active_claim_agent was wrong: ${listedClaimTarget.active_claim_agent}`);
+  assert(listedClaimTarget.active_claim_harness === "Claude Code", `listIssues active_claim_harness was wrong: ${listedClaimTarget.active_claim_harness}`);
+  assert(listedClaimTarget.last_acceptance_at === acceptanceComment.created_at, "listIssues did not expose latest acceptance timestamp");
+  const detailedClaimTarget = getIssue("CTH-900006");
+  assert(detailedClaimTarget.active_claim_count === 1, `getIssue active_claim_count was wrong: ${detailedClaimTarget.active_claim_count}`);
+  assert(detailedClaimTarget.active_claims.length === 1, "getIssue did not expose active claims");
+  assert(detailedClaimTarget.active_claims[0].agent_name === "Agent B", "getIssue active claim agent was wrong");
+  assert(detailedClaimTarget.active_claims[0].harness === "Claude Code", "getIssue active claim harness was wrong");
+  assert(detailedClaimTarget.last_acceptance_comment.id === acceptanceComment.id, "getIssue did not expose latest acceptance comment");
   assert(listIssueClaims({ issue_id: "CTH-900006" }).length === 1, "listIssueClaims should show only one active claim");
   const completedClaim = releaseIssueClaim({ issue_id: "CTH-900006", session_id: "session-agent-b", status: "completed" });
   assert(completedClaim.released === true, "releaseIssueClaim did not release active claim");
   assert(completedClaim.claim.status === "completed", "releaseIssueClaim did not store completed status");
+  const listedAfterRelease = listIssues({ limit: 250 }).find((issue) => issue.identifier === "CTH-900006");
+  assert(Number(listedAfterRelease.active_claim_count) === 0, "released claim remained visible in listIssues agent state");
   assert(listIssueClaims({ issue_id: "CTH-900006" }).length === 0, "default listIssueClaims returned a completed claim as active by issue");
   assert(!listIssueClaims({ session_id: "session-agent-b" }).some((claim) => claim.id === completedClaim.claim.id), "default listIssueClaims returned a completed claim as active by session");
   assert(!listIssueClaims().some((claim) => claim.id === completedClaim.claim.id), "default listIssueClaims returned a completed claim as active globally");
@@ -440,6 +500,22 @@ try {
   db.prepare("UPDATE agent_sessions SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = 'session-agent-a'").run();
   assert(!listAgentSessions().some((session) => session.id === "session-agent-a"), "default listAgentSessions returned an expired session as active");
   assert(listAgentSessions({ include_ended: true }).some((session) => session.id === "session-agent-a"), "historical listAgentSessions did not include expired session");
+  const endedSessionStateTarget = upsertIssue({ title: "Ended session state target", identifier: "CTH-900020", status: "Todo" });
+  startAgentSession({ id: "session-agent-c", agent_name: "Agent C", harness: "OpenClaw", ttl_minutes: 30 });
+  claimIssue({ issue_id: endedSessionStateTarget.identifier, session_id: "session-agent-c", ttl_minutes: 30 });
+  db.prepare("UPDATE agent_sessions SET status = 'ended', ended_at = '2026-05-20T00:00:00.000Z', expires_at = '2999-01-01T00:00:00.000Z' WHERE id = 'session-agent-c'").run();
+  const endedSessionDetail = getIssue(endedSessionStateTarget.identifier);
+  assert(endedSessionDetail.active_claim_count === 0, "getIssue showed a claim from an ended session as active");
+  const endedSessionListed = listIssues({ limit: 250 }).find((issue) => issue.identifier === endedSessionStateTarget.identifier);
+  assert(Number(endedSessionListed.active_claim_count) === 0, "listIssues showed a claim from an ended session as active");
+  const expiredSessionStateTarget = upsertIssue({ title: "Expired session state target", identifier: "CTH-900021", status: "Todo" });
+  startAgentSession({ id: "session-agent-d", agent_name: "Agent D", harness: "Hermes", ttl_minutes: 30 });
+  claimIssue({ issue_id: expiredSessionStateTarget.identifier, session_id: "session-agent-d", ttl_minutes: 30 });
+  db.prepare("UPDATE agent_sessions SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = 'session-agent-d'").run();
+  const expiredSessionDetail = getIssue(expiredSessionStateTarget.identifier);
+  assert(expiredSessionDetail.active_claim_count === 0, "getIssue showed a claim from an expired session as active");
+  const expiredSessionListed = listIssues({ limit: 250 }).find((issue) => issue.identifier === expiredSessionStateTarget.identifier);
+  assert(Number(expiredSessionListed.active_claim_count) === 0, "listIssues showed a claim from an expired session as active");
   endAgentSession({ session_id: "session-agent-b" });
   assert(listIssueClaims({ session_id: "session-agent-b" }).length === 0, "endAgentSession did not release active claims by default");
   assert(listAgentSessions({ include_ended: true }).some((session) => session.id === "session-agent-b" && session.status === "ended"), "ended session was not listed");

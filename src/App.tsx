@@ -50,7 +50,25 @@ type Issue = {
   team_name?: string;
   labels: string[];
   updated_at: string;
-  comments?: { id: string; body: string; author: string; created_at: string }[];
+  active_claim_count?: number;
+  active_claim_agent?: string | null;
+  active_claim_harness?: string | null;
+  active_claims?: IssueClaim[];
+  last_acceptance_at?: string | null;
+  last_acceptance_comment?: IssueComment | null;
+  comments?: IssueComment[];
+};
+
+type IssueComment = { id: string; body: string; author: string; created_at: string };
+
+type IssueClaim = {
+  id: string;
+  session_id: string;
+  agent_name: string;
+  harness?: string | null;
+  note?: string | null;
+  claimed_at?: string;
+  expires_at: string;
 };
 
 type StatusMode = "all" | "active" | "paused" | "backlog" | "todo" | "blockers";
@@ -578,7 +596,7 @@ function IssuesPage({
                     <StatusIcon statusType={statusType} />
                     <strong>{issue.title}</strong>
                     <span className="relation">{issue.project_name}</span>
-                    <span className="assignee"><UserRound size={15} /></span>
+                    <AgentStateInline issue={issue} />
                     <time>{formatShortDate(issue.updated_at)}</time>
                   </button>
                 );
@@ -600,6 +618,7 @@ function IssueDetail({ issue, onAddComment }: { issue: Issue | null; onAddCommen
       <h2>{issue.title}</h2>
       <div className="detail-pills"><PriorityPill priority={issue.priority} /><span>{issue.project_name}</span><span>{issue.team_name}</span></div>
       <p>{issue.description || "No description yet."}</p>
+      <AgentStatePanel issue={issue} />
       <div className="comments-box">
         <strong>Activity</strong>
         {issue.comments?.map((comment) => <article key={comment.id}><b>{comment.author}</b><span>{comment.body}</span></article>)}
@@ -618,6 +637,7 @@ function IssueDialog({ issue, onClose, onAddComment }: { issue: Issue; onClose: 
         <h2 id="issue-dialog-title">{issue.title}</h2>
         <div className="detail-pills"><PriorityPill priority={issue.priority} /><span>{issue.project_name}</span><span>{issue.team_name}</span></div>
         <p>{issue.description || "No description yet."}</p>
+        <AgentStatePanel issue={issue} />
         <div className="comments-box">
           <strong>Activity</strong>
           {issue.comments?.map((comment) => <article key={comment.id}><b>{comment.author}</b><span>{comment.body}</span></article>)}
@@ -628,8 +648,95 @@ function IssueDialog({ issue, onClose, onAddComment }: { issue: Issue; onClose: 
   );
 }
 
+function AgentStateInline({ issue }: { issue: Issue }) {
+  const claimCount = activeClaimCount(issue);
+  const agentLabel = issue.active_claim_agent || issue.active_claims?.[0]?.agent_name;
+  const hasAcceptance = Boolean(issue.last_acceptance_at || latestAcceptanceForIssue(issue));
+  if (!claimCount && !hasAcceptance) {
+    return <span className="agent-inline muted-agent" title="No active agent claim"><UserRound size={15} /></span>;
+  }
+  return (
+    <span className="agent-inline">
+      {claimCount > 0 ? (
+        <span className={claimCount > 1 ? "agent-chip warning" : "agent-chip"} title={claimCount > 1 ? `${claimCount} active claims` : `Claimed by ${agentLabel || "agent"}`}>
+          <UserRound size={13} />
+          <span>{agentLabel ? shortAgentName(agentLabel) : claimCount}</span>
+        </span>
+      ) : null}
+      {hasAcceptance ? <CheckCircle2 className="agent-accepted" size={14} aria-label="Accepted" /> : null}
+    </span>
+  );
+}
+
+function AgentStatePanel({ issue }: { issue: Issue }) {
+  const claimCount = activeClaimCount(issue);
+  const activeClaims = issue.active_claims ?? [];
+  const acceptance = issue.last_acceptance_comment ?? latestAcceptanceForIssue(issue);
+  const hasClaimConflict = claimCount > 1;
+  return (
+    <section className={hasClaimConflict ? "agent-state warning" : "agent-state"} aria-label="Agent state">
+      <div className="agent-state-head">
+        <strong>Agent state</strong>
+        {hasClaimConflict ? <span><AlertTriangle size={14} />Multiple active claims</span> : null}
+      </div>
+      {activeClaims.length ? (
+        <div className="agent-state-lines">
+          {activeClaims.map((claim) => (
+            <div key={claim.id}>
+              <UserRound size={14} />
+              <span><b>{claim.agent_name}</b>{claim.harness ? ` via ${claim.harness}` : ""}</span>
+              {claim.note ? <em>{claim.note}</em> : null}
+            </div>
+          ))}
+        </div>
+      ) : claimCount > 0 ? (
+        <div className="agent-state-lines">
+          <div><UserRound size={14} /><span><b>{issue.active_claim_agent || "Agent"}</b>{issue.active_claim_harness ? ` via ${issue.active_claim_harness}` : ""}</span></div>
+        </div>
+      ) : (
+        <p>No active agent claim.</p>
+      )}
+      {acceptance ? (
+        <div className="acceptance-note">
+          <CheckCircle2 size={14} />
+          <span><b>{acceptance.author}</b> accepted on {formatShortDate(acceptance.created_at)}: {acceptance.body}</span>
+        </div>
+      ) : (
+        <p>No acceptance comment yet.</p>
+      )}
+    </section>
+  );
+}
+
 function issueCode(issue: Pick<Issue, "identifier" | "id">) {
   return issue.identifier || issue.id;
+}
+
+function activeClaimCount(issue: Issue) {
+  return Number(issue.active_claim_count ?? issue.active_claims?.length ?? 0);
+}
+
+function latestAcceptanceForIssue(issue: Issue) {
+  return issue.comments?.filter(isAcceptanceComment).at(-1) ?? null;
+}
+
+function isAcceptanceComment(comment: IssueComment) {
+  const body = comment.body.trim().toLowerCase();
+  return (
+    body.startsWith("acceptance") ||
+    body.startsWith("accepted") ||
+    body.startsWith("plan/fact acceptance") ||
+    (body.startsWith("repeat ") && body.includes(" acceptance")) ||
+    body.startsWith("reviewer-opponent acceptance") ||
+    (body.startsWith("closure note:") && body.includes("acceptance was already reached"))
+  );
+}
+
+function shortAgentName(label: string) {
+  const normalized = label.replace(/^Codex GPT-[\d.]+/i, "Codex").replace(/\s+/g, " ").trim();
+  if (normalized.length <= 10) return normalized;
+  const parts = normalized.split(" ");
+  return parts[0].length <= 10 ? parts[0] : `${parts[0].slice(0, 9)}...`;
 }
 
 function groupIssues(issues: Issue[]) {

@@ -172,6 +172,7 @@ CREATE INDEX IF NOT EXISTS idx_issues_identifier ON issues(identifier);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_identifier_unique ON issues(identifier) WHERE identifier IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_issues_assignee_status ON issues(assignee, status);
 CREATE INDEX IF NOT EXISTS idx_projects_updated ON projects(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_comments_issue_created ON comments(issue_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_agent_sessions_status_expires ON agent_sessions(status, expires_at);
 CREATE INDEX IF NOT EXISTS idx_issue_claims_issue_active ON issue_claims(issue_id, released_at, expires_at);
 CREATE INDEX IF NOT EXISTS idx_issue_claims_session ON issue_claims(session_id, released_at);
@@ -190,6 +191,13 @@ const migrations: {
       database.exec("INSERT INTO issue_fts(issue_fts) VALUES('rebuild')");
     },
   },
+  {
+    id: "0002_comments_issue_created_index",
+    description: "Index comments by issue and creation time for agent acceptance lookups",
+    up: (database) => {
+      database.exec("CREATE INDEX IF NOT EXISTS idx_comments_issue_created ON comments(issue_id, created_at DESC)");
+    },
+  },
 ];
 
 export function runMigrations(database: SqliteDatabase = db) {
@@ -198,14 +206,16 @@ export function runMigrations(database: SqliteDatabase = db) {
   const tx = database.transaction(() => {
     normalizeLegacyMigrationRows(database);
     const exists = database.prepare("SELECT 1 FROM schema_migrations WHERE id = @id");
-    const record = database.prepare(`
-      INSERT INTO schema_migrations (id, name, applied_at)
-      VALUES (@id, @name, @applied_at)
-    `);
+    const record = prepareMigrationRecord(database);
     for (const migration of migrations) {
       if (exists.get({ id: migration.id })) continue;
       migration.up(database);
-      record.run({ id: migration.id, name: migration.description, applied_at: nowIso() });
+      record.run({
+        id: migration.id,
+        name: migration.description,
+        description: migration.description,
+        applied_at: nowIso(),
+      });
       applied.push(migration.id);
     }
   });
@@ -247,6 +257,20 @@ function normalizeLegacyMigrationRows(database: SqliteDatabase) {
     WHERE id = '0001_bootstrap_schema'
       AND EXISTS (SELECT 1 FROM schema_migrations WHERE id = '0001_baseline_schema')
   `).run();
+}
+
+function prepareMigrationRecord(database: SqliteDatabase) {
+  const columns = database.prepare("PRAGMA table_info(schema_migrations)").all() as { name: string }[];
+  if (columns.some((column) => column.name === "description")) {
+    return database.prepare(`
+      INSERT INTO schema_migrations (id, name, description, applied_at)
+      VALUES (@id, @name, @description, @applied_at)
+    `);
+  }
+  return database.prepare(`
+    INSERT INTO schema_migrations (id, name, applied_at)
+    VALUES (@id, @name, @applied_at)
+  `);
 }
 
 function isDuplicateColumnError(error: unknown) {

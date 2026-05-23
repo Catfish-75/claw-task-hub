@@ -598,7 +598,7 @@ button {
   background: transparent;
   color: var(--text);
   display: grid;
-  grid-template-columns: 46px 74px 22px minmax(260px, 1fr) minmax(130px, 210px) 36px 58px;
+  grid-template-columns: 46px 74px 22px minmax(220px, 1fr) minmax(120px, 190px) minmax(70px, 110px) 58px;
   align-items: center;
   gap: 6px;
   text-align: left;
@@ -617,9 +617,55 @@ button {
 
 .issue-id,
 .relation,
-.assignee,
+.agent-inline,
 .linear-issue-row time {
   color: var(--muted);
+}
+
+.agent-inline {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+}
+
+.muted-agent {
+  color: var(--dim);
+}
+
+.agent-chip {
+  max-width: 88px;
+  min-width: 0;
+  height: 22px;
+  border: 1px solid #253b69;
+  border-radius: 999px;
+  background: #101a2d;
+  color: #9dbaff;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.agent-chip span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-chip.warning {
+  border-color: #703333;
+  background: #251212;
+  color: #ff9b9b;
+}
+
+.agent-accepted {
+  color: var(--green);
+  flex: none;
 }
 
 .issue-detail {
@@ -702,6 +748,76 @@ button {
   color: #d7d7d7;
   line-height: 1.55;
   white-space: pre-wrap;
+}
+
+.agent-state {
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #101010;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.agent-state.warning {
+  border-color: #543131;
+}
+
+.agent-state-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.agent-state-head strong {
+  color: var(--text);
+}
+
+.agent-state-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #ff9b9b;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.agent-state p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.agent-state-lines,
+.acceptance-note {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-state-lines div,
+.acceptance-note {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #d0d0d0;
+  font-size: 13px;
+}
+
+.agent-state-lines span,
+.acceptance-note span {
+  min-width: 0;
+}
+
+.agent-state-lines em {
+  color: var(--muted);
+  font-style: normal;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .comments-box {

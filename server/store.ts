@@ -26,6 +26,16 @@ const normalizedIssueStatusTypeSql = `
     ELSE i.status_type
   END
 `;
+const acceptanceCommentSql = (column: string) => `
+  (
+    lower(trim(${column})) LIKE 'acceptance%'
+    OR lower(trim(${column})) LIKE 'accepted%'
+    OR lower(trim(${column})) LIKE 'plan/fact acceptance%'
+    OR lower(trim(${column})) LIKE 'repeat % acceptance%'
+    OR lower(trim(${column})) LIKE 'reviewer-opponent acceptance%'
+    OR lower(trim(${column})) LIKE 'closure note:%acceptance was already reached%'
+  )
+`;
 
 export type IssueInput = {
   id?: string;
@@ -231,7 +241,7 @@ export function listIssues(filters: { project?: string; project_id?: string; tea
   const projectFilter = filters.project ?? filters.project_id;
   const teamFilter = filters.team ?? filters.team_id;
   const where: string[] = ["i.archived_at IS NULL"];
-  const params: Record<string, unknown> = { limit, offset };
+  const params: Record<string, unknown> = { limit, offset, active_at: nowIso() };
   if (projectFilter) {
     where.push("(i.project_id = @project OR p.name = @project OR p.external_id = @project)");
     params.project = projectFilter;
@@ -258,7 +268,55 @@ export function listIssues(filters: { project?: string; project_id?: string; tea
     where.push(`${normalizedIssueStatusTypeSql} NOT IN ('completed', 'canceled')`);
   }
   let sql = `
-    SELECT i.*, p.name AS project_name, t.name AS team_name
+    SELECT
+      i.*,
+      p.name AS project_name,
+      t.name AS team_name,
+      (
+        SELECT COUNT(*)
+        FROM issue_claims c
+        JOIN agent_sessions s ON s.id = c.session_id
+        WHERE c.issue_id = i.id
+          AND c.released_at IS NULL
+          AND c.status = 'active'
+          AND c.expires_at > @active_at
+          AND s.status = 'active'
+          AND s.expires_at > @active_at
+      ) AS active_claim_count,
+      (
+        SELECT c.agent_name
+        FROM issue_claims c
+        JOIN agent_sessions s ON s.id = c.session_id
+        WHERE c.issue_id = i.id
+          AND c.released_at IS NULL
+          AND c.status = 'active'
+          AND c.expires_at > @active_at
+          AND s.status = 'active'
+          AND s.expires_at > @active_at
+        ORDER BY c.heartbeat_at DESC, c.claimed_at DESC
+        LIMIT 1
+      ) AS active_claim_agent,
+      (
+        SELECT s.harness
+        FROM issue_claims c
+        JOIN agent_sessions s ON s.id = c.session_id
+        WHERE c.issue_id = i.id
+          AND c.released_at IS NULL
+          AND c.status = 'active'
+          AND c.expires_at > @active_at
+          AND s.status = 'active'
+          AND s.expires_at > @active_at
+        ORDER BY c.heartbeat_at DESC, c.claimed_at DESC
+        LIMIT 1
+      ) AS active_claim_harness,
+      (
+        SELECT c.created_at
+        FROM comments c
+        WHERE c.issue_id = i.id
+          AND ${acceptanceCommentSql("c.body")}
+        ORDER BY c.created_at DESC
+        LIMIT 1
+      ) AS last_acceptance_at
     FROM issues i
     LEFT JOIN projects p ON p.id = i.project_id
     LEFT JOIN teams t ON t.id = i.team_id
@@ -292,7 +350,17 @@ export function getIssue(id: string) {
   `).get({ id });
   if (!issue) return null;
   const comments = db.prepare("SELECT * FROM comments WHERE issue_id = @issue_id ORDER BY created_at").all({ issue_id: (issue as { id: string }).id });
-  return { ...hydrateIssue(issue), comments };
+  const issueId = (issue as { id: string }).id;
+  const activeClaims = activeIssueClaims(issueId);
+  return {
+    ...hydrateIssue(issue),
+    comments,
+    active_claims: activeClaims,
+    active_claim_count: activeClaims.length,
+    active_claim_agent: activeClaims[0]?.agent_name ?? null,
+    active_claim_harness: activeClaims[0]?.harness ?? null,
+    last_acceptance_comment: latestAcceptanceComment(issueId),
+  };
 }
 
 export function listTruncatedLinearIssues(limit = 500) {
@@ -747,11 +815,28 @@ function getIssueClaim(id: string) {
 
 function activeIssueClaims(issueId: string, at = nowIso()) {
   return db.prepare(`
+    SELECT c.*, s.harness
+    FROM issue_claims c
+    JOIN agent_sessions s ON s.id = c.session_id
+    WHERE c.issue_id=@issue_id
+      AND c.released_at IS NULL
+      AND c.status='active'
+      AND c.expires_at > @at
+      AND s.status='active'
+      AND s.expires_at > @at
+    ORDER BY c.heartbeat_at DESC, c.claimed_at DESC
+  `).all({ issue_id: issueId, at }) as { id: string; session_id: string; agent_name: string; harness?: string | null; note: string | null; expires_at: string }[];
+}
+
+function latestAcceptanceComment(issueId: string) {
+  return db.prepare(`
     SELECT *
-    FROM issue_claims
-    WHERE issue_id=@issue_id AND released_at IS NULL AND status='active' AND expires_at > @at
-    ORDER BY claimed_at DESC
-  `).all({ issue_id: issueId, at }) as { id: string; session_id: string; agent_name: string; note: string | null; expires_at: string }[];
+    FROM comments
+    WHERE issue_id = @issue_id
+      AND ${acceptanceCommentSql("body")}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get({ issue_id: issueId }) ?? null;
 }
 
 function supersedeActiveIssueClaims(issueId: string, at = nowIso()) {
