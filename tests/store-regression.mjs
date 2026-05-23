@@ -233,6 +233,12 @@ try {
   const visibleComment = saveComment({ issue_id: "SAV-900001", body: "Visible identifier comment", author: "Agent" });
   assert(visibleComment.id !== oldComment.id, "saveComment returned an unrelated null-external-id comment");
   assert(visibleComment.issue_id === migrated.id, "saveComment did not resolve a visible issue identifier");
+  const createdWithComments = getIssue(created.identifier);
+  const migratedWithComments = getIssue("SAV-900001");
+  assert(createdWithComments.comments.length === 1, "getIssue returned comments from another issue");
+  assert(createdWithComments.comments[0].id === oldComment.id, "getIssue returned the wrong comment for the original issue");
+  assert(migratedWithComments.comments.length === 1, "getIssue missed the migrated issue comment or included extras");
+  assert(migratedWithComments.comments[0].id === visibleComment.id, "getIssue returned the wrong comment for the migrated issue");
   const firstExternalComment = saveComment({
     issue_id: "SAV-900001",
     external_id: "agent-run-comment-1",
