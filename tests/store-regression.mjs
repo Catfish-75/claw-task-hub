@@ -121,12 +121,44 @@ try {
     existingMigrationDb.close();
   }
   ensureDefaultTeam();
+  const storeProject = upsertProject({
+    id: "project_store_regression",
+    external_id: "store-regression-project",
+    name: "Store Regression Project",
+  });
+
+  const rowCountBeforeMissingProject = db.prepare("SELECT COUNT(*) AS count FROM issues").get().count;
+  let missingProjectMessage = "";
+  try {
+    upsertIssue({ title: "Missing project must fail", status: "Todo" });
+  } catch (error) {
+    missingProjectMessage = error instanceof Error ? error.message : String(error);
+  }
+  assert(missingProjectMessage.includes("project_id is required when creating an issue"), `missing project error was not clear: ${missingProjectMessage}`);
+  assert(db.prepare("SELECT COUNT(*) AS count FROM issues").get().count === rowCountBeforeMissingProject, "missing project_id created an issue");
+  let invalidProjectMessage = "";
+  try {
+    upsertIssue({ title: "Invalid project must fail", status: "Todo", project_id: "project-does-not-exist" });
+  } catch (error) {
+    invalidProjectMessage = error instanceof Error ? error.message : String(error);
+  }
+  assert(invalidProjectMessage === "Project not found: project-does-not-exist", `invalid project error was not clear: ${invalidProjectMessage}`);
+  assert(db.prepare("SELECT COUNT(*) AS count FROM issues").get().count === rowCountBeforeMissingProject, "invalid project_id created an issue");
+  const deliberateUnassigned = upsertIssue({
+    title: "Deliberate unassigned inbox issue",
+    identifier: "CTH-900022",
+    status: "Todo",
+    project_id: null,
+    allow_no_project: true,
+  });
+  assert(deliberateUnassigned.project_id === null, "allow_no_project:true did not permit an explicit unassigned issue");
 
   const created = upsertIssue({
     title: "Identifier/id collision regression",
     identifier: "CTH-900001",
     status: "Todo",
     status_type: "unstarted",
+    project_id: storeProject.id,
   });
 
   const updated = upsertIssue({
@@ -150,6 +182,7 @@ try {
     external_id: "issue-id-alias-external",
     status: "Todo",
     project_id: null,
+    allow_no_project: true,
   });
   const issueIdInternalUpdate = upsertIssue({
     issue_id: issueIdAliasTarget.id,
@@ -196,6 +229,7 @@ try {
     title: "Conflicting locator target",
     identifier: "CTH-900012",
     status: "Todo",
+    project_id: storeProject.id,
   });
   let conflictingLocatorMessage = "";
   try {
@@ -213,6 +247,7 @@ try {
     title: "Explicit identifier owner",
     identifier: "CTH-999998",
     status: "Todo",
+    project_id: storeProject.id,
   });
   let explicitConflictCode = "";
   let explicitConflictMessage = "";
@@ -222,6 +257,7 @@ try {
       identifier: "CTH-999998",
       title: "Explicit identifier duplicate must fail",
       status: "Todo",
+      project_id: storeProject.id,
     });
   } catch (error) {
     explicitConflictCode = typeof error === "object" && error && "code" in error ? String(error.code) : "";
@@ -272,12 +308,13 @@ try {
     status: "Done",
     status_type: "backlog",
     labels: JSON.stringify(["theme", "security"]),
+    project_id: storeProject.id,
   });
   assert(done.status_type === "completed", `Done issue stored wrong status_type: ${done.status_type}`);
   assert(Array.isArray(done.labels) && done.labels.join(",") === "theme,security", "labels were not normalized to an array");
 
-  const started = upsertIssue({ title: "Array filter started", identifier: "CTH-900003", status: "In Progress" });
-  const blocked = upsertIssue({ title: "Array filter blocked", identifier: "CTH-900004", status: "Blocked" });
+  const started = upsertIssue({ title: "Array filter started", identifier: "CTH-900003", status: "In Progress", project_id: storeProject.id });
+  const blocked = upsertIssue({ title: "Array filter blocked", identifier: "CTH-900004", status: "Blocked", project_id: storeProject.id });
   const arrayFiltered = listIssues({ status_type: ["started", "blocked"], limit: 20 });
   const arrayFilteredIds = new Set(arrayFiltered.map((issue) => issue.identifier));
   assert(arrayFilteredIds.has(started.identifier), "listIssues array status_type missed started issue");
@@ -352,7 +389,7 @@ try {
   }
   assert(invalidIssueMessage === "Issue not found: CTH-DOES-NOT-EXIST", `invalid issue error was not clear: ${invalidIssueMessage}`);
 
-  const claimTarget = upsertIssue({ title: "Agent claim target", identifier: "CTH-900006", status: "Todo" });
+  const claimTarget = upsertIssue({ title: "Agent claim target", identifier: "CTH-900006", status: "Todo", project_id: storeProject.id });
   const sessionA = startAgentSession({ id: "session-agent-a", agent_name: "Agent A", harness: "Codex", ttl_minutes: 30, metadata: { thread: "alpha" } });
   assert(sessionA.id === "session-agent-a", "startAgentSession did not preserve requested id");
   assert(sessionA.metadata.thread === "alpha", "startAgentSession did not hydrate metadata");
@@ -420,7 +457,7 @@ try {
     "include_released:\"true\" did not show completed claim history",
   );
 
-  const claimIdReleaseTarget = upsertIssue({ title: "Claim id release target", identifier: "CTH-900016", status: "Todo" });
+  const claimIdReleaseTarget = upsertIssue({ title: "Claim id release target", identifier: "CTH-900016", status: "Todo", project_id: storeProject.id });
   const claimIdClaim = claimIssue({ issue_id: claimIdReleaseTarget.identifier, session_id: "session-agent-a", ttl_minutes: 30 });
   const claimIdRelease = releaseIssueClaim({ claim_id: claimIdClaim.claim.id, status: "completed" });
   assert(claimIdRelease.released === true, "releaseIssueClaim did not release by claim_id");
@@ -428,7 +465,7 @@ try {
   assert(claimIdRelease.claim.status === "completed", "releaseIssueClaim by claim_id did not store completed status");
   assert(listIssueClaims({ issue_id: claimIdReleaseTarget.identifier }).length === 0, "releaseIssueClaim by claim_id left an active claim visible");
 
-  const wrongClaimSessionTarget = upsertIssue({ title: "Wrong claim id session target", identifier: "CTH-900017", status: "Todo" });
+  const wrongClaimSessionTarget = upsertIssue({ title: "Wrong claim id session target", identifier: "CTH-900017", status: "Todo", project_id: storeProject.id });
   const wrongClaimSession = claimIssue({ issue_id: wrongClaimSessionTarget.identifier, session_id: "session-agent-a", ttl_minutes: 30 });
   let wrongClaimSessionMessage = "";
   try {
@@ -442,7 +479,7 @@ try {
   assert(forcedClaimIdRelease.released === true, "force release by claim_id did not release the active claim");
   assert(listIssueClaims({ issue_id: wrongClaimSessionTarget.identifier }).length === 0, "force release by claim_id left active claims visible");
 
-  const staleReleaseTarget = upsertIssue({ title: "Stale newest claim release target", identifier: "CTH-900013", status: "Todo" });
+  const staleReleaseTarget = upsertIssue({ title: "Stale newest claim release target", identifier: "CTH-900013", status: "Todo", project_id: storeProject.id });
   db.prepare(`
     INSERT INTO issue_claims (id, issue_id, session_id, agent_name, status, note, claimed_at, heartbeat_at, expires_at, released_at, force)
     VALUES
@@ -457,7 +494,7 @@ try {
     "releaseIssueClaim did not expire stale unreleased rows before release",
   );
 
-  const wrongSessionTarget = upsertIssue({ title: "Wrong session release target", identifier: "CTH-900014", status: "Todo" });
+  const wrongSessionTarget = upsertIssue({ title: "Wrong session release target", identifier: "CTH-900014", status: "Todo", project_id: storeProject.id });
   claimIssue({ issue_id: wrongSessionTarget.identifier, session_id: "session-agent-a", ttl_minutes: 30 });
   let wrongSessionMessage = "";
   try {
@@ -471,7 +508,7 @@ try {
   assert(forcedWrongSessionRelease.released === true, "force release did not release the active claim");
   assert(listIssueClaims({ issue_id: wrongSessionTarget.identifier }).length === 0, "force release left active claims visible");
 
-  const duplicateActiveTarget = upsertIssue({ title: "Duplicate active claim release target", identifier: "CTH-900015", status: "Todo" });
+  const duplicateActiveTarget = upsertIssue({ title: "Duplicate active claim release target", identifier: "CTH-900015", status: "Todo", project_id: storeProject.id });
   db.prepare(`
     INSERT INTO issue_claims (id, issue_id, session_id, agent_name, status, note, claimed_at, heartbeat_at, expires_at, released_at, force)
     VALUES
@@ -487,7 +524,7 @@ try {
     "duplicate-active release did not supersede the duplicate active claim",
   );
 
-  const expiryTarget = upsertIssue({ title: "Expired claim target", identifier: "CTH-900007", status: "Todo" });
+  const expiryTarget = upsertIssue({ title: "Expired claim target", identifier: "CTH-900007", status: "Todo", project_id: storeProject.id });
   const expiringClaim = claimIssue({ issue_id: expiryTarget.identifier, session_id: "session-agent-a", ttl_minutes: 30 });
   db.prepare("UPDATE issue_claims SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = @id").run({ id: expiringClaim.claim.id });
   assert(listIssueClaims({ issue_id: expiryTarget.identifier }).length === 0, "default listIssueClaims returned an expired claim as active");
@@ -500,7 +537,7 @@ try {
   db.prepare("UPDATE agent_sessions SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = 'session-agent-a'").run();
   assert(!listAgentSessions().some((session) => session.id === "session-agent-a"), "default listAgentSessions returned an expired session as active");
   assert(listAgentSessions({ include_ended: true }).some((session) => session.id === "session-agent-a"), "historical listAgentSessions did not include expired session");
-  const endedSessionStateTarget = upsertIssue({ title: "Ended session state target", identifier: "CTH-900020", status: "Todo" });
+  const endedSessionStateTarget = upsertIssue({ title: "Ended session state target", identifier: "CTH-900020", status: "Todo", project_id: storeProject.id });
   startAgentSession({ id: "session-agent-c", agent_name: "Agent C", harness: "OpenClaw", ttl_minutes: 30 });
   claimIssue({ issue_id: endedSessionStateTarget.identifier, session_id: "session-agent-c", ttl_minutes: 30 });
   db.prepare("UPDATE agent_sessions SET status = 'ended', ended_at = '2026-05-20T00:00:00.000Z', expires_at = '2999-01-01T00:00:00.000Z' WHERE id = 'session-agent-c'").run();
@@ -508,7 +545,7 @@ try {
   assert(endedSessionDetail.active_claim_count === 0, "getIssue showed a claim from an ended session as active");
   const endedSessionListed = listIssues({ limit: 250 }).find((issue) => issue.identifier === endedSessionStateTarget.identifier);
   assert(Number(endedSessionListed.active_claim_count) === 0, "listIssues showed a claim from an ended session as active");
-  const expiredSessionStateTarget = upsertIssue({ title: "Expired session state target", identifier: "CTH-900021", status: "Todo" });
+  const expiredSessionStateTarget = upsertIssue({ title: "Expired session state target", identifier: "CTH-900021", status: "Todo", project_id: storeProject.id });
   startAgentSession({ id: "session-agent-d", agent_name: "Agent D", harness: "Hermes", ttl_minutes: 30 });
   claimIssue({ issue_id: expiredSessionStateTarget.identifier, session_id: "session-agent-d", ttl_minutes: 30 });
   db.prepare("UPDATE agent_sessions SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = 'session-agent-d'").run();

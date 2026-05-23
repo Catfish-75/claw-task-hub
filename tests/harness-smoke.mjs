@@ -232,6 +232,7 @@ try {
   assert(listIssuesSchema?.include_done?.type === "boolean", "MCP list_issues schema does not advertise include_done:boolean");
   const saveIssueSchema = mcpTools.find((tool) => tool.name === "save_issue")?.inputSchema?.properties;
   assert(saveIssueSchema?.issue_id?.type === "string", "MCP save_issue schema does not advertise issue_id:string");
+  assert(saveIssueSchema?.allow_no_project?.type === "boolean", "MCP save_issue schema does not advertise allow_no_project:boolean");
   const releaseClaimSchema = mcpTools.find((tool) => tool.name === "release_issue_claim")?.inputSchema?.properties;
   assert(releaseClaimSchema?.claim_id?.type === "string", "MCP release_issue_claim schema does not advertise claim_id:string");
 
@@ -246,6 +247,20 @@ try {
   assert(project.id, "save_project did not return an id");
   const projects = runHub("tools/call", "list_projects").projects;
   assert(projects.some((item) => item.id === project.id), "list_projects did not return the saved project");
+
+  const missingProjectFailure = runHubExpectFailure("save_issue", {
+    title: "Harness issue without project must fail",
+    status: "Todo",
+  });
+  assert(missingProjectFailure.status !== 0, "save_issue without project_id unexpectedly succeeded");
+  assert(missingProjectFailure.stderr.includes("project_id is required when creating an issue"), "save_issue without project_id did not explain the project requirement");
+  const invalidProjectFailure = runHubExpectFailure("save_issue", {
+    title: "Harness issue with invalid project must fail",
+    project_id: "missing-project",
+    status: "Todo",
+  });
+  assert(invalidProjectFailure.status !== 0, "save_issue with invalid project_id unexpectedly succeeded");
+  assert(invalidProjectFailure.stderr.includes("Project not found: missing-project"), "save_issue invalid project_id did not explain the missing project");
 
   const createdIssue = runHub("tools/call", "save_issue", {
     title: "Harness smoke issue",

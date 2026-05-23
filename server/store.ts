@@ -48,6 +48,7 @@ export type IssueInput = {
   status_type?: string;
   priority?: number;
   project_id?: string | null;
+  allow_no_project?: boolean | string | number | null;
   team_id?: string | null;
   parent_id?: string | null;
   assignee?: string | null;
@@ -426,7 +427,7 @@ function upsertIssueLocked(input: IssueInput) {
     status,
     status_type: statusType,
     priority: input.priority ?? numberValue(existing?.priority) ?? 3,
-    project_id: hasOwn(input, "project_id") ? resolveProjectId(input.project_id) : stringValue(existing?.project_id),
+    project_id: resolveIssueProjectId(input, existing),
     team_id: hasOwn(input, "team_id") ? resolveTeamId(input.team_id) : stringValue(existing?.team_id) ?? defaultTeamId(),
     parent_id: hasOwn(input, "parent_id") ? resolveParentId(input.parent_id) : stringValue(existing?.parent_id),
     assignee: hasOwn(input, "assignee") ? input.assignee ?? null : stringValue(existing?.assignee),
@@ -1047,6 +1048,21 @@ function getIssueRowByLocator(value: string) {
 
 function issueLabel(issue: Record<string, unknown>) {
   return stringValue(issue.identifier) ?? stringValue(issue.id) ?? "unknown issue";
+}
+
+function resolveIssueProjectId(input: IssueInput, existing?: Record<string, unknown>) {
+  if (hasOwn(input, "project_id")) {
+    if (input.project_id == null) {
+      if (booleanValue(input.allow_no_project, false)) return null;
+      throw new Error("project_id:null requires allow_no_project:true. Use list_projects and pass the owning project_id for normal issues.");
+    }
+    const resolved = resolveProjectId(input.project_id);
+    if (!resolved) throw new Error(`Project not found: ${input.project_id}`);
+    return resolved;
+  }
+  if (existing) return stringValue(existing.project_id);
+  if (booleanValue(input.allow_no_project, false)) return null;
+  throw new Error("project_id is required when creating an issue. Use list_projects first and pass the owning project_id; pass allow_no_project:true only for a deliberate unassigned inbox issue.");
 }
 
 function normalizeLabels(value: unknown): string[] {

@@ -106,6 +106,7 @@ app.post("/api/issues", (req, res) => {
     status_type: z.string().optional(),
     priority: z.number().int().min(0).max(4).optional(),
     project_id: z.string().nullable().optional(),
+    allow_no_project: z.boolean().optional(),
     team_id: z.string().nullable().optional(),
     assignee: z.string().nullable().optional(),
     labels: z.array(z.string()).optional(),
@@ -114,7 +115,11 @@ app.post("/api/issues", (req, res) => {
       ctx.addIssue({ code: "custom", path: ["title"], message: "title is required when creating an issue" });
     }
   });
-  res.json({ issue: upsertIssue(schema.parse(req.body)) });
+  try {
+    res.json({ issue: upsertIssue(schema.parse(req.body)) });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.post("/api/issues/:id/comments", (req, res) => {

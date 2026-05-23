@@ -542,6 +542,22 @@ button {
   font-weight: 800;
 }
 
+.disabled-create {
+  grid-template-columns: 24px 1fr;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.create-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  color: #ff8b8b;
+  font-size: 12px;
+}
+
 .issues-and-detail {
   min-height: 0;
   min-width: 0;

@@ -184,6 +184,7 @@ function saveLinearIssue(issue: LinearIssue) {
     status_type: issue.statusType,
     priority: priorityValue(issue.priority),
     project_id: issue.projectId,
+    allow_no_project: !issue.projectId,
     team_id: issue.teamId,
     parent_id: issue.parentId,
     assignee: assigneeName(issue.assignee),

@@ -62,6 +62,8 @@ $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
 npm run hub -- tools/call save_issue "base64:$b64"
 ```
 
+New issues must include the owning `project_id` from `list_projects`. Claw Task Hub does not infer a default project; this prevents agents from filing work into the wrong project by accident. Use `allow_no_project:true` only for a deliberate unassigned inbox issue.
+
 Start a session and claim the issue:
 
 ```powershell

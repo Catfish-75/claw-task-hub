@@ -234,6 +234,18 @@ assert(
 const issueRowCount = await page.locator(".linear-issue-row").count();
 assert(issueRowCount > 0, "Linear-like issue rows are missing");
 await assertNoDuplicateVisibleIssueCodes("seed project");
+const createdTitle = `UI smoke routed issue ${Date.now()}`;
+await page.locator(".linear-create input[name='title']").fill(createdTitle);
+await page.locator(".linear-create input[name='description']").fill("Created from a project page to verify issue routing.");
+await page.locator(".linear-create button").click();
+await page.getByText(createdTitle, { exact: true }).waitFor({ state: "visible", timeout: 10000 });
+const routedIssues = runHub("list_issues", {
+  project_id: "project_codex_task_hub_mvp",
+  query: createdTitle,
+  limit: 10,
+});
+assert(routedIssues.issues.length === 1, `Project-page issue create did not create exactly one routed issue: ${routedIssues.issues.length}`);
+assert(routedIssues.issues[0].project_id === "project_codex_task_hub_mvp", `Project-page issue was routed to the wrong project: ${routedIssues.issues[0].project_id}`);
 const firstIssueCode = (await page.locator(".linear-issue-row .issue-id").first().textContent())?.trim() ?? "";
 assert(/^[A-Z][A-Z0-9]{1,8}-\d{1,6}$/.test(firstIssueCode), `Issue code is not short/local: ${firstIssueCode}`);
 await page.locator(".linear-issue-row").first().dblclick();

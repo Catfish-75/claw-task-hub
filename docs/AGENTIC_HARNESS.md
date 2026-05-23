@@ -91,6 +91,8 @@ List projects:
 npm run hub -- tools/call list_projects "{}"
 ```
 
+Project routing is mandatory for new issues. Always select the owning project from `list_projects` and pass its `project_id` to `save_issue`. Do not copy a project id from an unrelated example or another project. Claw Task Hub intentionally rejects new issues with no project or an unknown project; `allow_no_project:true` is only for a deliberate unassigned inbox issue.
+
 List open issues in the CTH MVP project:
 
 ```powershell

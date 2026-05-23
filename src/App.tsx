@@ -124,6 +124,7 @@ function App() {
   const [query, setQuery] = useState("");
   const [statusMode, setStatusMode] = useState<StatusMode>("all");
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const pageRef = useRef<"projects" | "workspace" | "project">("projects");
   const projectDetailRef = useRef<ProjectDetail | null>(null);
@@ -211,6 +212,7 @@ function App() {
     setTab(nextTab);
     setQuery("");
     setStatusMode("all");
+    setCreateError(null);
   }
 
   async function openIssue(issue: Issue, reveal = false) {
@@ -225,6 +227,11 @@ function App() {
     const data = new FormData(form);
     const title = String(data.get("title") ?? "").trim();
     if (!title) return;
+    if (!projectDetail?.project.id) {
+      setCreateError("Open a project before creating an issue.");
+      return;
+    }
+    setCreateError(null);
     setCreating(true);
     try {
       const created = await api<{ issue: Issue }>("/issues", {
@@ -232,7 +239,7 @@ function App() {
         body: JSON.stringify({
           title,
           description: String(data.get("description") ?? ""),
-          project_id: projectDetail?.project.id ?? projects[0]?.id,
+          project_id: projectDetail.project.id,
           status: "Backlog",
           status_type: "backlog",
           priority: Number(data.get("priority") ?? 3),
@@ -243,6 +250,8 @@ function App() {
       await refresh();
       await openIssue(created.issue);
       setTab("issues");
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : String(error));
     } finally {
       setCreating(false);
     }
@@ -293,12 +302,14 @@ function App() {
             setPage("projects");
             setProjectDetail(null);
             setSelectedIssue(null);
+            setCreateError(null);
           }}
           onWorkspace={() => {
             setPage("workspace");
             setProjectDetail(null);
             setSelectedIssue(workspaceIssues[0] ?? null);
             setTab("issues");
+            setCreateError(null);
           }}
           onTab={setTab}
         />
@@ -313,6 +324,8 @@ function App() {
             query={query}
             statusMode={statusMode}
             creating={creating}
+            createError={createError}
+            canCreate={false}
             onQuery={setQuery}
             onStatusMode={setStatusMode}
             onCreate={createIssue}
@@ -331,6 +344,8 @@ function App() {
             query={query}
             statusMode={statusMode}
             creating={creating}
+            createError={createError}
+            canCreate={true}
             onQuery={setQuery}
             onStatusMode={setStatusMode}
             onCreate={createIssue}
@@ -534,6 +549,8 @@ function IssuesPage({
   query,
   statusMode,
   creating,
+  createError,
+  canCreate,
   onQuery,
   onStatusMode,
   onCreate,
@@ -546,6 +563,8 @@ function IssuesPage({
   query: string;
   statusMode: StatusMode;
   creating: boolean;
+  createError: string | null;
+  canCreate: boolean;
   onQuery: (value: string) => void;
   onStatusMode: (mode: StatusMode) => void;
   onCreate: (event: FormEvent<HTMLFormElement>) => void;
@@ -568,13 +587,21 @@ function IssuesPage({
         <button className={statusMode === "backlog" ? "mode-chip active" : "mode-chip"} onClick={() => onStatusMode("backlog")}>Backlog</button>
         <button className={statusMode === "todo" ? "mode-chip active" : "mode-chip"} onClick={() => onStatusMode("todo")}>Todo</button>
       </div>
-      <form className="linear-create" onSubmit={onCreate}>
-        <Plus size={16} />
-        <input name="title" placeholder={`New issue in ${title}`} />
-        <select name="priority" defaultValue="3"><option value="1">P1</option><option value="2">P2</option><option value="3">P3</option><option value="4">P4</option></select>
-        <input name="description" placeholder="Short note" />
-        <button disabled={creating}>{creating ? "Saving" : "Add"}</button>
-      </form>
+      {canCreate ? (
+        <form className="linear-create" onSubmit={onCreate}>
+          <Plus size={16} />
+          <input name="title" placeholder={`New issue in ${title}`} />
+          <select name="priority" defaultValue="3"><option value="1">P1</option><option value="2">P2</option><option value="3">P3</option><option value="4">P4</option></select>
+          <input name="description" placeholder="Short note" />
+          <button disabled={creating}>{creating ? "Saving" : "Add"}</button>
+        </form>
+      ) : (
+        <div className="linear-create disabled-create">
+          <Plus size={16} />
+          <span>Open a project to create an issue</span>
+        </div>
+      )}
+      {createError ? <div className="create-error"><AlertTriangle size={14} />{createError}</div> : null}
       <div className="issues-and-detail">
         <div className="linear-issue-list">
           {grouped.length === 0 ? (

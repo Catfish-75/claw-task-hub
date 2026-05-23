@@ -17,4 +17,5 @@
   - `npm run public-hygiene`
 - Use `docs/AGENTIC_HARNESS.md` as the canonical agent and harness contract.
 - Use visible issue identifiers such as `CTH-272`, `LOCAL-1`, or imported historical identifiers in conversation and tool calls.
+- New issues must be filed under an explicit owning project id from `list_projects`; never infer or copy a default project id from unrelated examples.
 - Do not store secrets in issues, comments, docs, tests, fixtures, or screenshots.
