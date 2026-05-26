@@ -47,7 +47,7 @@ app.use(cors({
 app.use(express.json({ limit: "5mb" }));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, dbPath, mode: "local", host, linear: "retired" });
+  res.json({ ok: true, dbPath, mode: "local", host });
 });
 
 app.get("/api/dashboard", (_req, res) => res.json(dashboard()));

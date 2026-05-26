@@ -1,6 +1,6 @@
 # Agentic Harness Contract
 
-Claw Task Hub is a local task system for AI agents first and human operators second. Humans should be able to read every record, but the durable contract is built for agentic harnesses, MCP-compatible clients, CLIs, and other local automation runtimes.
+Claw Task Hub is a local, Linear-like task system for AI agents first and human operators second. Humans get a familiar issue-tracker flow, but the durable contract is built for agentic harnesses, MCP-compatible clients, CLIs, and other local automation runtimes.
 
 This document is the canonical contract for agents and harness authors.
 

@@ -1,7 +1,7 @@
 ## Claw Task Hub Project Instructions
 
 - Product name: Claw Task Hub.
-- This repository is a local-first task hub designed primarily for AI agents and agentic harnesses.
+- This repository is a local-first, Linear-like task hub designed primarily for AI agents and agentic harnesses.
 - Keep the product universal across harnesses. MCP-compatible agents, CLIs, and local automation runners are the target surface.
 - Use relative repository paths in documentation and code examples. Do not commit machine-specific install paths, LAN addresses, proxy settings, VPN settings, or user names.
 - Default API behavior must remain local-only. Non-loopback binding requires an explicit unsafe flag and must be documented as unsupported for public deployment without additional authentication.

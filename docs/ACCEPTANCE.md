@@ -2,7 +2,7 @@
 
 ## Goal
 
-Claw Task Hub is a local-first task workspace designed primarily for AI agents and agentic harnesses. The MVP must run on one machine, keep a local source of truth, survive cloud/MCP outages, and preserve imported or mirrored history without making any hosted tracker a runtime dependency.
+Claw Task Hub is a local-first, Linear-like task workspace designed primarily for AI agents and agentic harnesses. The MVP must run on one machine, keep a local source of truth, survive cloud/MCP outages, and preserve imported or mirrored history without making any hosted tracker a runtime dependency.
 
 The system should be useful to MCP-compatible clients, CLIs, and agent-driven development or operations workflows. Human operators remain first-class users, but the task model, CLI/MCP surface, and activity history should be especially ergonomic for autonomous or semi-autonomous agents.
 

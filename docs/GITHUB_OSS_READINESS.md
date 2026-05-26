@@ -2,12 +2,12 @@
 
 This checklist is the pre-publication gate for making Claw Task Hub public on GitHub.
 
-Claw Task Hub is intended to be a local-first task hub for agentic harnesses. Public release work must keep that product direction visible while removing local-machine assumptions and private operational data.
+Claw Task Hub is intended to be a local-first, Linear-like task hub for agentic harnesses. Public release work must keep that product direction visible while removing local-machine assumptions and private operational data.
 
 ## Release Boundary
 
 - Product name is `Claw Task Hub`.
-- Public positioning: local-first task hub designed first for AI agents and agentic harnesses.
+- Public positioning: local-first, Linear-like task hub designed first for AI agents and agentic harnesses.
 - Supported harness examples may include MCP-compatible clients, CLIs, and local automation runners.
 - External ticketing services are not active runtime dependencies.
 - Machine-specific install paths are private deployment notes, not public defaults.

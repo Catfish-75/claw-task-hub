@@ -1,7 +1,7 @@
 {
   "name": "claw-task-hub",
   "private": true,
-  "description": "Local-first task hub for AI agents and agentic harnesses.",
+  "description": "Local-first, Linear-like task hub for AI agents and agentic harnesses.",
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",

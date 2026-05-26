@@ -12,7 +12,7 @@ Good contributions improve one or more of these areas:
 - issue/session/claim coordination for multiple agents;
 - local SQLite durability and upgrade safety;
 - clear agent-facing documentation;
-- familiar issue-tracker UI clarity without turning the app into a hosted service by default.
+- Linear-like UI clarity without turning the app into a hosted service by default.
 
 ## Development Setup
 

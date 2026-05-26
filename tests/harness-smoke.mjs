@@ -201,7 +201,7 @@ async function assertApiLinearImportAbsent() {
       headers: { "content-type": "application/json" },
       body: "{}",
     });
-    assert(response.status === 404, `normal API exposed retired Linear import route with ${response.status}`);
+    assert(response.status === 404, `normal API exposed Linear import route with ${response.status}`);
   } finally {
     await stopProcessTree(child);
   }

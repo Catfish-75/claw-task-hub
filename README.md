@@ -1,6 +1,6 @@
 # Claw Task Hub
 
-Claw Task Hub is a local-first task hub designed primarily for AI agents and agentic harnesses. Humans can use the UI, but the durable contract is optimized for agents that need deterministic project, issue, comment, session, claim, and acceptance-trail workflows.
+Claw Task Hub is a local-first, Linear-like task hub designed primarily for AI agents and agentic harnesses. Humans can use the familiar issue-tracker UI, but the durable contract is optimized for agents that need deterministic project, issue, comment, session, claim, and acceptance-trail workflows.
 
 It is designed for autonomous and semi-autonomous workflows across MCP-compatible agents, CLIs, and local automation runtimes.
 

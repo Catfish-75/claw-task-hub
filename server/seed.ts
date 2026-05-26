@@ -5,7 +5,7 @@ const project = upsertProject({
   id: "project_claw_task_hub_mvp",
   external_id: "local:claw-task-hub-mvp",
   name: "Claw Task Hub MVP",
-  summary: "Local-first task hub built for AI agents and agentic harnesses.",
+  summary: "Local-first, Linear-like task hub built for AI agents and agentic harnesses.",
   description: "Tracks local projects, issues, comments, sessions, claims, and acceptance trails without cloud issue limits.",
   status: "In Progress",
   priority: 2,
