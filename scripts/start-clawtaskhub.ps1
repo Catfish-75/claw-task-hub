@@ -2,10 +2,12 @@ $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $LogDir = Join-Path $ProjectRoot "logs"
-$OutLog = Join-Path $LogDir "claw-task-hub.out.log"
-$ErrLog = Join-Path $LogDir "claw-task-hub.err.log"
+$SupervisorLog = Join-Path $LogDir "claw-task-hub-supervisor.log"
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+Get-ChildItem -Path $LogDir -Filter "claw-task-hub-*.log" -ErrorAction SilentlyContinue |
+  Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-14) } |
+  Remove-Item -Force -ErrorAction SilentlyContinue
 
 function Test-HttpOk {
   param([string]$Url)
@@ -40,16 +42,40 @@ $uiReady = Test-ClawTaskHubUi
 $apiReady = Test-ClawTaskHubApi
 
 if ($uiReady -and $apiReady) {
-  Add-Content -Path $OutLog -Value "[$(Get-Date -Format o)] Claw Task Hub already running."
+  Add-Content -Path $SupervisorLog -Value "[$(Get-Date -Format o)] Claw Task Hub already running."
   exit 0
 }
 
-Add-Content -Path $OutLog -Value "[$(Get-Date -Format o)] Starting Claw Task Hub from $ProjectRoot"
+$RunStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$OutLog = Join-Path $LogDir "claw-task-hub-$RunStamp.out.log"
+$ErrLog = Join-Path $LogDir "claw-task-hub-$RunStamp.err.log"
 
-Start-Process `
+Add-Content -Path $SupervisorLog -Value "[$(Get-Date -Format o)] Starting Claw Task Hub from $ProjectRoot; uiReady=$uiReady apiReady=$apiReady"
+
+$process = Start-Process `
   -FilePath "npm.cmd" `
   -ArgumentList @("run", "dev") `
   -WorkingDirectory $ProjectRoot `
   -WindowStyle Hidden `
   -RedirectStandardOutput $OutLog `
-  -RedirectStandardError $ErrLog
+  -RedirectStandardError $ErrLog `
+  -PassThru
+
+$deadline = (Get-Date).AddSeconds(45)
+do {
+  Start-Sleep -Seconds 3
+  $uiReady = Test-ClawTaskHubUi
+  $apiReady = Test-ClawTaskHubApi
+  if ($uiReady -and $apiReady) {
+    Add-Content -Path $SupervisorLog -Value "[$(Get-Date -Format o)] Claw Task Hub started; pid=$($process.Id); out=$OutLog; err=$ErrLog"
+    exit 0
+  }
+} while ((Get-Date) -lt $deadline -and -not $process.HasExited)
+
+if ($process.HasExited) {
+  Add-Content -Path $SupervisorLog -Value "[$(Get-Date -Format o)] Claw Task Hub process exited early; pid=$($process.Id); exit=$($process.ExitCode); out=$OutLog; err=$ErrLog"
+  exit 1
+}
+
+Add-Content -Path $SupervisorLog -Value "[$(Get-Date -Format o)] Claw Task Hub process started but readiness timed out; pid=$($process.Id); uiReady=$uiReady apiReady=$apiReady; out=$OutLog; err=$ErrLog"
+exit 1
