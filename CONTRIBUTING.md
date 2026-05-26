@@ -12,7 +12,7 @@ Good contributions improve one or more of these areas:
 - issue/session/claim coordination for multiple agents;
 - local SQLite durability and upgrade safety;
 - clear agent-facing documentation;
-- Linear-like UI clarity without turning the app into a hosted service by default.
+- familiar issue-tracker UI clarity without turning the app into a hosted service by default.
 
 ## Development Setup
 
@@ -57,6 +57,6 @@ Do not commit:
 
 Run `npm run public-hygiene` before publishing or opening a pull request.
 
-## Retired Linear Boundary
+## External Import Boundary
 
-Linear import recovery code is retained only for explicit legacy recovery. Normal work must not connect to Linear or expose retired Linear tools in the standard tool list.
+External tracker import code is retained only for explicit operator-run history imports. Normal work must not connect to external ticketing services or expose import tools in the standard tool list.

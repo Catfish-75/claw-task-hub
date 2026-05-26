@@ -6,7 +6,7 @@ All notable changes to Claw Task Hub will be documented in this file.
 
 - Set the package version to `0.1.0` for the first public MVP release.
 - Added MIT license for public release preparation.
-- Moved retired Linear migration out of normal runtime into a standalone opt-in migration tool.
+- Kept optional Linear history import outside normal runtime as a standalone opt-in operator tool.
 - Added agent session and issue claim lifecycle support for multi-agent coordination.
 - Added harness smoke coverage for list, create, read, comment, session, claim, release, and close workflows.
 - Added self-contained UI smoke coverage that runs against a temporary seeded database and random local ports.

@@ -1,14 +1,14 @@
 # Agentic Harness Contract
 
-Claw Task Hub is a local task system for AI agents first and human operators second. Humans should be able to read every record, but the durable contract is built for agentic harnesses such as Codex, Claude Code, OpenClaw, Hermes, and future local or remote runners.
+Claw Task Hub is a local task system for AI agents first and human operators second. Humans should be able to read every record, but the durable contract is built for agentic harnesses, MCP-compatible clients, CLIs, and other local automation runtimes.
 
 This document is the canonical contract for agents and harness authors.
 
 ## Source Of Truth
 
 - The local SQLite database is the durable source of truth.
-- Linear is retired for normal operation. Do not connect to Linear, do not refresh Linear imports, and do not treat Linear as an active fallback.
-- Existing `SAV-*` records are imported history and can still be updated locally when work continues.
+- Normal operation is independent of external ticketing services. Do not connect to external trackers as an active fallback during Claw Task Hub work.
+- Imported records from prior systems are local history and can still be updated locally when work continues.
 - New work should be created in Claw Task Hub with local identifiers.
 
 ## Local Deployment Boundary
@@ -23,7 +23,7 @@ This document is the canonical contract for agents and harness authors.
 Each issue has three identity fields:
 
 - `id`: internal stable row id, often `issue_*` for local rows.
-- `identifier`: short visible code such as `CTH-267`, `LOCAL-1`, or imported `SAV-264`.
+- `identifier`: short visible code such as `CTH-267`, `LOCAL-1`, or another imported legacy identifier.
 - `external_id`: optional foreign-system id for imported or mirrored records.
 
 Agents should use the visible `identifier` in conversation and comments. Tool calls may pass `id`, `external_id`, or `identifier` when updating or reading an existing issue.
@@ -70,7 +70,7 @@ Agents must:
 Agents must not:
 
 - Store passwords, OAuth tokens, private keys, cookies, or raw secret values in issues or comments.
-- Reconnect to Linear for CTH work.
+- Reconnect to an external tracker as an active fallback for Claw Task Hub work.
 - Invent long code-like issue titles such as `LOCAL_SAV_...` when a short identifier already exists.
 - Mark work `Done` without verification or an explicit owner decision.
 - Reassign or close another active agent's issue without reading the current comments and status.
@@ -93,10 +93,10 @@ npm run hub -- tools/call list_projects "{}"
 
 Project routing is mandatory for new issues. Always select the owning project from `list_projects` and pass its `project_id` to `save_issue`. Do not copy a project id from an unrelated example or another project. Claw Task Hub intentionally rejects new issues with no project or an unknown project; `allow_no_project:true` is only for a deliberate unassigned inbox issue.
 
-List open issues in the CTH MVP project:
+List open issues in a selected project:
 
 ```powershell
-$json = '{"project_id":"project_codex_task_hub_mvp","include_done":false,"limit":50}'
+$json = '{"project_id":"<target-project-id>","include_done":false,"limit":50}'
 $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
 npm run hub -- tools/call list_issues "base64:$b64"
 ```
@@ -106,7 +106,7 @@ For active-work discovery, pass `include_done:false`. This excludes normalized `
 Create a local issue:
 
 ```powershell
-$json = '{"title":"Document agentic harness contract","description":"Write the canonical harness contract and link it from README and AGENTS.","project_id":"project_codex_task_hub_mvp","team_id":"team_local","parent_id":"LOCAL-1","priority":1,"status":"Todo","status_type":"unstarted","labels":["agentic-harness","docs"],"source":"local"}'
+$json = '{"title":"Document agentic harness contract","description":"Write the canonical harness contract and link it from README and AGENTS.","project_id":"<target-project-id>","team_id":"team_local","parent_id":"LOCAL-1","priority":1,"status":"Todo","status_type":"unstarted","labels":["agentic-harness","docs"],"source":"local"}'
 $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
 npm run hub -- tools/call save_issue "base64:$b64"
 ```
@@ -137,7 +137,7 @@ npm run hub -- tools/call save_issue "base64:$b64"
 
 ## MCP Tool Surface
 
-Harnesses should prefer MCP when the server is available. Existing host configurations may still use the compatibility server id `codex_task_hub`.
+Harnesses should prefer MCP when the server is available.
 
 Canonical tool names:
 
@@ -158,7 +158,7 @@ Canonical tool names:
 - `list_issue_claims`
 - `repair_issue_invariants`
 
-Legacy Linear migration is an operator-only tool under `tools/linear-migration`. It is not part of the normal API, MCP server, or hub CLI, and it still requires `CLAW_TASK_HUB_ALLOW_LINEAR_IMPORT=1` for an explicit one-off recovery run. Harnesses must not call it during normal CTH work.
+Optional history import from Linear is an operator-only tool under `tools/linear-migration`. It is not part of the normal API, MCP server, or hub CLI, and it still requires `CLAW_TASK_HUB_ALLOW_LINEAR_IMPORT=1` for an explicit one-off import run. Harnesses must not call it during normal Claw Task Hub work.
 
 For the operator-facing migration procedure, see [LINEAR_MIGRATION.md](LINEAR_MIGRATION.md). That guide is for planned history transfer only, not active task work.
 

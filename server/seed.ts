@@ -2,10 +2,10 @@ import { ensureDefaultTeam, upsertIssue, upsertProject } from "./store.js";
 
 const team = ensureDefaultTeam() as { id: string };
 const project = upsertProject({
-  id: "project_codex_task_hub_mvp",
+  id: "project_claw_task_hub_mvp",
   external_id: "local:claw-task-hub-mvp",
   name: "Claw Task Hub MVP",
-  summary: "Local Linear-like task hub built for AI agents and agentic harnesses.",
+  summary: "Local-first task hub built for AI agents and agentic harnesses.",
   description: "Tracks local projects, issues, comments, sessions, claims, and acceptance trails without cloud issue limits.",
   status: "In Progress",
   priority: 2,

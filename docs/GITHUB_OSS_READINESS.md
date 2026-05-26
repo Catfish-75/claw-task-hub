@@ -7,9 +7,9 @@ Claw Task Hub is intended to be a local-first task hub for agentic harnesses. Pu
 ## Release Boundary
 
 - Product name is `Claw Task Hub`.
-- Public positioning: local Linear-like task hub designed first for AI agents and agentic harnesses.
-- Supported harness examples may include Codex, Claude Code, OpenClaw, Hermes, and other compatible runners.
-- Linear is not an active dependency. Imported `SAV-*` records are local history only.
+- Public positioning: local-first task hub designed first for AI agents and agentic harnesses.
+- Supported harness examples may include MCP-compatible clients, CLIs, and local automation runners.
+- External ticketing services are not active runtime dependencies.
 - Machine-specific install paths are private deployment notes, not public defaults.
 
 ## Required Before Public GitHub
@@ -23,9 +23,9 @@ Claw Task Hub is intended to be a local-first task hub for agentic harnesses. Pu
 - Run a path audit for machine-specific paths, private hostnames, LAN addresses, and personal names.
 - Confirm README explains the agentic harness contract before UI details.
 - Confirm `docs/AGENTIC_HARNESS.md` is current.
-- Confirm `docs/LINEAR_MIGRATION.md` explains the optional one-off Linear history migration path through the standalone migration tool.
-- Confirm the API, CLI, and MCP runtime do not expose retired Linear import tools.
-- Confirm no Linear connection is required for install, tests, or normal use.
+- Confirm optional external history import tools are documented as standalone operator workflows.
+- Confirm the API, CLI, and MCP runtime do not expose history import tools.
+- Confirm no external ticketing connection is required for install, tests, or normal use.
 
 ## Nice To Have After Publication
 
@@ -64,8 +64,8 @@ npm run lint
 npm run public-hygiene
 ```
 
-The harness smoke is mandatory because it proves the core agent workflow works without the UI and without Linear.
-The UI smoke is mandatory because it proves the Linear-like browser flow from a temporary seeded database instead of relying on private local history.
+The harness smoke is mandatory because it proves the core agent workflow works without the browser UI or external ticketing services.
+The UI smoke is mandatory because it proves the browser flow from a temporary seeded database instead of relying on checked-in example data.
 
 ## Documentation Gate
 
@@ -77,8 +77,8 @@ Public docs should cover:
 - CLI/MCP examples for list, create, read, comment, claim, release, and close;
 - status and `status_type` semantics;
 - no-secret policy;
-- Linear retirement and the separate historical-import boundary;
-- optional one-off Linear migration procedure through the standalone migration tool;
+- external-history import boundary;
+- optional one-off import procedure through standalone operator tools;
 - pre-production test gate;
 - contribution and issue-reporting expectations.
 - local-only network boundary and unsafe non-loopback flag.
@@ -89,7 +89,7 @@ Public docs should cover:
 - `git status --short` must be clean except deliberate release files.
 - Untracked local scratch files must remain untracked.
 - Do not commit the live local CTH database.
-- Do not commit host-specific Codex, HAPP, VPN, proxy, or LAN configuration.
+- Do not commit host-specific agent, proxy, VPN, or private-network configuration.
 - Do not commit user-specific names or machine-specific install paths.
 
 ## CI Candidate

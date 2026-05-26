@@ -1,12 +1,10 @@
 # Claw Task Hub
 
-Claw Task Hub is a local-first, Linear-like task hub designed primarily for AI agents and agentic harnesses. Humans can use the UI, but the durable contract is optimized for agents that need deterministic project, issue, comment, session, claim, and acceptance-trail workflows.
+Claw Task Hub is a local-first task hub designed primarily for AI agents and agentic harnesses. Humans can use the UI, but the durable contract is optimized for agents that need deterministic project, issue, comment, session, claim, and acceptance-trail workflows.
 
-The MVP started in a Codex workflow, but it is not Codex-specific. Codex, Claude Code, OpenClaw, Hermes, and other compatible runners should be able to use the same local task hub.
+It is designed for autonomous and semi-autonomous workflows across MCP-compatible agents, CLIs, and local automation runtimes.
 
-Linear is retired for active work. Existing imported `SAV-*` records are local history only. Normal operation must not connect to Linear, refresh Linear imports, or require a Linear account.
-
-For users who already have Linear history, the optional migration path is a separate operator tool documented in [docs/LINEAR_MIGRATION.md](docs/LINEAR_MIGRATION.md). It is not part of the normal API, MCP server, or hub CLI.
+Normal operation is independent of external ticketing services. Optional history import tools, where available, are operator-only utilities and are not part of the normal API, MCP server, or hub CLI.
 
 ## Quick Start
 
@@ -123,23 +121,19 @@ The MCP server can be started with:
 npm run mcp
 ```
 
-Some existing local hosts may still use the compatibility MCP server id `codex_task_hub`. Treat it as an alias for Claw Task Hub until host-level configs are migrated.
-
 ## Local Data
 
 Claw Task Hub uses SQLite with WAL mode, indexes, and FTS5 search.
 
 Schema initialization is deterministic. `server/db.ts` creates the bootstrap schema and records applied versions in the `schema_migrations` table. The first migration, `0001_baseline_schema`, is a baseline record for the current schema. Future schema changes should be added as explicit migrations and must be idempotent on existing local databases.
 
-Default database paths:
+Default database path:
 
-- New installs: `data/claw-task-hub.sqlite`
-- Existing compatibility installs: `data/codex-task-hub.sqlite` when that legacy file already exists
+- `data/claw-task-hub.sqlite`
 
 Environment variables:
 
 - `CLAW_TASK_HUB_DB`: preferred SQLite database override
-- `CODEX_TASK_HUB_DB`: legacy compatibility override
 - `PORT`: API port, default `4781`
 - `CLAW_TASK_HUB_HOST`: API host, default `127.0.0.1`
 - `CLAW_TASK_HUB_CORS_ORIGINS`: optional comma-separated list of extra allowed browser origins
@@ -161,13 +155,13 @@ npm run ui-smoke
 npm run public-hygiene
 ```
 
-`harness-smoke` proves the core agent workflow works without the UI and without Linear.
+`harness-smoke` proves the core agent workflow works without the browser UI or external ticketing services.
 `ui-smoke` starts an isolated temporary database, API server, and Vite UI on free local ports. Its first run may download the Playwright Chromium browser.
 
 ## Documentation
 
 - Agent and harness contract: [docs/AGENTIC_HARNESS.md](docs/AGENTIC_HARNESS.md)
-- Optional legacy Linear migration: [docs/LINEAR_MIGRATION.md](docs/LINEAR_MIGRATION.md)
+- Optional history import from Linear: [docs/LINEAR_MIGRATION.md](docs/LINEAR_MIGRATION.md)
 - Launch kit and announcement drafts: [docs/LAUNCH.md](docs/LAUNCH.md)
 - Public release readiness: [docs/GITHUB_OSS_READINESS.md](docs/GITHUB_OSS_READINESS.md)
 - MVP acceptance: [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)

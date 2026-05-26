@@ -171,7 +171,7 @@ runHub("save_issue", {
   identifier: "LOCAL-3",
   title: "Verify paused issue status",
   description: "Seeded by UI smoke to verify paused filtering and icon semantics.",
-  project_id: "project_codex_task_hub_mvp",
+  project_id: "project_claw_task_hub_mvp",
   status: "Paused",
   priority: 2,
   labels: ["ui-smoke"],
@@ -183,7 +183,7 @@ runHub("save_issue", {
   identifier: "LOCAL-4",
   title: "Verify todo issue status",
   description: "Seeded by UI smoke to verify todo filtering.",
-  project_id: "project_codex_task_hub_mvp",
+  project_id: "project_claw_task_hub_mvp",
   status: "Todo",
   priority: 3,
   labels: ["ui-smoke"],
@@ -232,7 +232,7 @@ assert(
   `Issue status group labels are empty; saw: ${visibleGroupLabels.join(", ")}`,
 );
 const issueRowCount = await page.locator(".linear-issue-row").count();
-assert(issueRowCount > 0, "Linear-like issue rows are missing");
+assert(issueRowCount > 0, "issue rows are missing");
 await assertNoDuplicateVisibleIssueCodes("seed project");
 const createdTitle = `UI smoke routed issue ${Date.now()}`;
 await page.locator(".linear-create input[name='title']").fill(createdTitle);
@@ -240,12 +240,12 @@ await page.locator(".linear-create input[name='description']").fill("Created fro
 await page.locator(".linear-create button").click();
 await page.getByText(createdTitle, { exact: true }).waitFor({ state: "visible", timeout: 10000 });
 const routedIssues = runHub("list_issues", {
-  project_id: "project_codex_task_hub_mvp",
+  project_id: "project_claw_task_hub_mvp",
   query: createdTitle,
   limit: 10,
 });
 assert(routedIssues.issues.length === 1, `Project-page issue create did not create exactly one routed issue: ${routedIssues.issues.length}`);
-assert(routedIssues.issues[0].project_id === "project_codex_task_hub_mvp", `Project-page issue was routed to the wrong project: ${routedIssues.issues[0].project_id}`);
+assert(routedIssues.issues[0].project_id === "project_claw_task_hub_mvp", `Project-page issue was routed to the wrong project: ${routedIssues.issues[0].project_id}`);
 const firstIssueCode = (await page.locator(".linear-issue-row .issue-id").first().textContent())?.trim() ?? "";
 assert(/^[A-Z][A-Z0-9]{1,8}-\d{1,6}$/.test(firstIssueCode), `Issue code is not short/local: ${firstIssueCode}`);
 await page.locator(".linear-issue-row").first().dblclick();

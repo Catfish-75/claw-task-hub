@@ -1,6 +1,6 @@
-# Legacy Linear Migration
+# Optional Linear History Import
 
-Claw Task Hub does not require Linear for normal use. Linear migration is an optional one-off recovery path for users who already have Linear history and want to copy that history into a local Claw Task Hub database.
+Claw Task Hub does not require Linear for normal use. The Linear importer is an optional one-off history transfer path for users who already have Linear data and want to copy that data into a local Claw Task Hub database.
 
 The migration tool is intentionally separate from the normal API, MCP server, and hub CLI. It is disabled by default. Enable it only for a planned import window, then turn it off again.
 
@@ -11,7 +11,7 @@ The current importer copies:
 - Linear teams into local teams;
 - Linear projects into local projects;
 - Linear issues into local issues;
-- issue identifiers such as imported `SAV-*` records when available;
+- issue identifiers from the source tracker when available;
 - external Linear ids into `external_id` for idempotent re-runs;
 - title, description, status, status type, priority, assignee, labels, URL, archive/completion timestamps, created/updated timestamps;
 - sync run metadata, including status, stats, cursor, and error text.
@@ -20,7 +20,7 @@ The importer also supports incremental re-runs. After a successful run, Claw Tas
 
 ## What Is Not Migrated
 
-The current legacy importer is issue-history oriented. It does not aim to be a full Linear clone.
+The current importer is issue-history oriented. It does not aim to be a full Linear clone.
 
 Do not assume it migrates:
 
@@ -48,7 +48,7 @@ After migration, Claw Task Hub remains the local source of truth.
 - The optional `mcp-remote` Linear flow can authenticate in the operator environment.
 - Network/proxy settings, if needed, are configured outside the repository.
 
-Optional Linear recovery environment variables:
+Optional Linear import environment variables:
 
 | Variable | Purpose |
 | --- | --- |
@@ -80,7 +80,6 @@ PowerShell example:
 
 ```powershell
 $db = "data/claw-task-hub.sqlite"
-if (Test-Path "data/codex-task-hub.sqlite") { $db = "data/codex-task-hub.sqlite" }
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 Copy-Item $db "$db.backup-$stamp"
 if (Test-Path "$db-wal") { Copy-Item "$db-wal" "$db-wal.backup-$stamp" }
@@ -140,7 +139,7 @@ npm run hub -- tools/call list_projects "{}"
 Check imported issues by visible identifier or query:
 
 ```powershell
-$json = '{"query":"SAV","limit":20}'
+$json = '{"query":"<source-prefix-or-keyword>","limit":20}'
 $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
 npm run hub -- tools/call list_issues "base64:$b64"
 ```
@@ -148,7 +147,7 @@ npm run hub -- tools/call list_issues "base64:$b64"
 Read a specific imported issue:
 
 ```powershell
-$json = '{"id":"SAV-264"}'
+$json = '{"id":"<imported-issue-identifier>"}'
 $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
 npm run hub -- tools/call get_issue "base64:$b64"
 ```
@@ -220,5 +219,5 @@ If counts look wrong:
 - `npm run migrate:linear -- backfill-descriptions --limit 500` completed or has documented remaining failures.
 - Dashboard counts match expectations.
 - Sample projects and issues open locally.
-- Retired Linear tools are disabled again.
+- Linear import tools are disabled again.
 - No secrets, tokens, cookies, or private network details were written into the repo or into Claw Task Hub records.

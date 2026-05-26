@@ -45,7 +45,7 @@ const tools = [
   tool("get_issue", "Get one local issue by id, external id, or identifier.", {
     id: { type: "string" },
   }, ["id"]),
-  tool("save_issue", "Create or update a local issue. New issues require the owning project_id from list_projects; Claw Task Hub never guesses a default project. Title is the human-readable task name, not an issue code. Short local identifiers like CTH-001 are assigned automatically unless a valid short identifier such as SAV-264 is provided. Updates can use issue_id, id, external_id, or identifier with partial fields. Use allow_no_project:true only for a deliberate unassigned inbox issue.", {
+  tool("save_issue", "Create or update a local issue. New issues require the owning project_id from list_projects; Claw Task Hub never guesses a default project. Title is the human-readable task name, not an issue code. Short local identifiers like CTH-001 are assigned automatically unless a valid imported identifier is provided. Updates can use issue_id, id, external_id, or identifier with partial fields. Use allow_no_project:true only for a deliberate unassigned inbox issue.", {
     id: { type: "string" },
     external_id: { type: "string" },
     identifier: { type: "string" },

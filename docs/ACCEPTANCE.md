@@ -2,9 +2,9 @@
 
 ## Goal
 
-Claw Task Hub is a local Linear-like workspace designed primarily for AI agents and agentic harnesses. The MVP must run on one machine, keep a local source of truth, survive cloud/MCP outages, and preserve imported history without cloud workspace issue limits.
+Claw Task Hub is a local-first task workspace designed primarily for AI agents and agentic harnesses. The MVP must run on one machine, keep a local source of truth, survive cloud/MCP outages, and preserve imported or mirrored history without making any hosted tracker a runtime dependency.
 
-The system should be useful to Codex, Claude Code, OpenClaw, Hermes, and other agent-driven development or operations workflows. Human operators remain first-class users, but the task model, CLI/MCP surface, and activity history should be especially ergonomic for autonomous or semi-autonomous agents.
+The system should be useful to MCP-compatible clients, CLIs, and agent-driven development or operations workflows. Human operators remain first-class users, but the task model, CLI/MCP surface, and activity history should be especially ergonomic for autonomous or semi-autonomous agents.
 
 ## Must Pass
 
@@ -14,7 +14,7 @@ The system should be useful to Codex, Claude Code, OpenClaw, Hermes, and other a
 - Projects, teams, issues, comments, documents, sync runs, and checkpoints have stable local IDs plus optional external IDs.
 - Replayed or mirrored writes are idempotent: external IDs update rows instead of creating duplicates.
 - Local REST API supports health, dashboard, teams, projects, issue list, issue detail, issue create, and comments.
-- Local tool CLI exposes Linear-like names: `list_projects`, `save_project`, `list_issues`, `get_issue`, `save_issue`, `save_comment`, `list_teams`.
+- Local tool CLI exposes stable issue-tracker names: `list_projects`, `save_project`, `list_issues`, `get_issue`, `save_issue`, `save_comment`, `list_teams`.
 - UI supports project filtering, status filtering, indexed search, list/detail flow, quick local issue creation, and comments.
 - Cloud/MCP outage leaves local read/write flows usable and visible as degraded mode.
 - Historical sync metadata can record status, stats, cursor, and error text without making any cloud service a runtime dependency.

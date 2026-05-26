@@ -8,13 +8,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this template for Codex, Claude Code, OpenClaw, Hermes, MCP, or other agentic harness integration work. Do not include secrets, real tokens, private paths, customer data, or private network details.
+        Use this template for MCP-compatible clients, CLIs, local automation runners, or other agentic harness integration work. Do not include secrets, real tokens, private paths, customer data, or private network details.
   - type: input
     id: harness
     attributes:
       label: Harness or agent runtime
       description: Which harness are you trying to connect?
-      placeholder: Codex, Claude Code, OpenClaw, Hermes, custom MCP runner, etc.
+      placeholder: Custom MCP runner, CLI harness, desktop agent, automation runtime, etc.
     validations:
       required: true
   - type: dropdown
