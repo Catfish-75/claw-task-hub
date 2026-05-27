@@ -42,7 +42,6 @@ $uiReady = Test-ClawTaskHubUi
 $apiReady = Test-ClawTaskHubApi
 
 if ($uiReady -and $apiReady) {
-  Add-Content -Path $SupervisorLog -Value "[$(Get-Date -Format o)] Claw Task Hub already running."
   exit 0
 }
 
