@@ -60,13 +60,14 @@ const tools = [
     team_id: { type: "string" },
     labels: { type: "array", items: { type: "string" } },
   }),
-  tool("save_comment", "Create a local comment on an issue. issue_id accepts the internal id, external id, or visible identifier such as CTH-212.", {
+  tool("save_comment", "Create a local comment on an open issue. issue_id accepts the internal id, external id, or visible identifier such as CTH-212. Done, Canceled, and archived issues require allow_closed=true for deliberate historical maintenance.", {
     id: { type: "string" },
     external_id: { type: "string" },
     issue_id: { type: "string" },
     body: { type: "string" },
     author: { type: "string" },
     source: { type: "string" },
+    allow_closed: { type: "boolean" },
   }, ["issue_id", "body"]),
   tool("start_agent_session", "Start or renew an agent work session for claim coordination.", {
     id: { type: "string" },
@@ -87,12 +88,13 @@ const tools = [
     include_ended: { type: "boolean" },
     limit: { type: "number" },
   }),
-  tool("claim_issue", "Claim an issue for an active agent session. Fails if another live claim exists unless force=true.", {
+  tool("claim_issue", "Claim an open issue for an active agent session. Fails if the issue is Done, Canceled, or archived unless allow_closed=true is passed for deliberate historical maintenance. Fails if another live claim exists unless force=true.", {
     issue_id: { type: "string" },
     session_id: { type: "string" },
     note: { type: "string" },
     ttl_minutes: { type: "number" },
     force: { type: "boolean" },
+    allow_closed: { type: "boolean" },
   }, ["issue_id", "session_id"]),
   tool("release_issue_claim", "Release or complete an active issue claim. Agents may pass claim_id directly, or issue_id plus session_id.", {
     claim_id: { type: "string" },

@@ -457,6 +457,28 @@ try {
     "include_released:\"true\" did not show completed claim history",
   );
 
+  const closedClaimTarget = upsertIssue({ title: "Closed claim guard target", identifier: "CTH-900023", status: "Done", project_id: storeProject.id });
+  let closedClaimMessage = "";
+  try {
+    claimIssue({ issue_id: closedClaimTarget.identifier, session_id: "session-agent-a" });
+  } catch (error) {
+    closedClaimMessage = error instanceof Error ? error.message : String(error);
+  }
+  assert(closedClaimMessage.includes("Issue CTH-900023 is completed"), `closed issue claim did not fail clearly: ${closedClaimMessage}`);
+  assert(listIssueClaims({ issue_id: closedClaimTarget.identifier, include_released: true }).length === 0, "closed issue claim guard still wrote a claim");
+  let closedCommentMessage = "";
+  try {
+    saveComment({ issue_id: closedClaimTarget.identifier, body: "Wrong task journal entry" });
+  } catch (error) {
+    closedCommentMessage = error instanceof Error ? error.message : String(error);
+  }
+  assert(closedCommentMessage.includes("Issue CTH-900023 is completed"), `closed issue comment did not fail clearly: ${closedCommentMessage}`);
+  const allowedClosedComment = saveComment({ issue_id: closedClaimTarget.identifier, body: "Deliberate historical note", allow_closed: true });
+  assert(allowedClosedComment.issue_id === closedClaimTarget.id, "allow_closed comment did not target the closed issue");
+  const allowedClosedClaim = claimIssue({ issue_id: closedClaimTarget.identifier, session_id: "session-agent-a", allow_closed: true, ttl_minutes: 30 });
+  assert(allowedClosedClaim.claim.issue_id === closedClaimTarget.id, "allow_closed claim did not target the closed issue");
+  releaseIssueClaim({ claim_id: allowedClosedClaim.claim.id, status: "released" });
+
   const claimIdReleaseTarget = upsertIssue({ title: "Claim id release target", identifier: "CTH-900016", status: "Todo", project_id: storeProject.id });
   const claimIdClaim = claimIssue({ issue_id: claimIdReleaseTarget.identifier, session_id: "session-agent-a", ttl_minutes: 30 });
   const claimIdRelease = releaseIssueClaim({ claim_id: claimIdClaim.claim.id, status: "completed" });

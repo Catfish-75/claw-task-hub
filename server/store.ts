@@ -63,7 +63,14 @@ export type IssueInput = {
 
 type FilterValue = string | string[] | null | undefined;
 type AgentSessionInput = { id?: string; agent_name: string; harness?: string | null; ttl_minutes?: number; metadata?: unknown };
-type ClaimIssueInput = { issue_id: string; session_id: string; note?: string | null; ttl_minutes?: number; force?: boolean | string | number | null };
+type ClaimIssueInput = {
+  issue_id: string;
+  session_id: string;
+  note?: string | null;
+  ttl_minutes?: number;
+  force?: boolean | string | number | null;
+  allow_closed?: boolean | string | number | null;
+};
 type ReleaseIssueClaimInput = {
   issue_id?: string;
   claim_id?: string;
@@ -456,10 +463,12 @@ function upsertIssueLocked(input: IssueInput) {
   return row.id;
 }
 
-export function saveComment(input: { id?: string; external_id?: string; issue_id: string; body: string; author?: string; source?: string; created_at?: string; updated_at?: string }) {
+export function saveComment(input: { id?: string; external_id?: string; issue_id: string; body: string; author?: string; source?: string; created_at?: string; updated_at?: string; allow_closed?: boolean | string | number | null }) {
   const at = nowIso();
   const issueId = resolveParentId(input.issue_id);
   if (!issueId) throw new Error(`Issue not found: ${input.issue_id}`);
+  const issue = getClaimableIssue(issueId);
+  assertIssueOpenForAgentWrite(issue, input.allow_closed, "comment on");
   const externalId = nonEmptyString(input.external_id);
   const row = {
     id: input.id ?? makeId("comment"),
@@ -562,6 +571,8 @@ export function claimIssue(input: ClaimIssueInput) {
   const at = nowIso();
   const issueId = resolveParentId(input.issue_id);
   if (!issueId) throw new Error(`Issue not found: ${input.issue_id}`);
+  const issue = getClaimableIssue(issueId);
+  assertIssueOpenForAgentWrite(issue, input.allow_closed, "claim");
   const session = getActiveAgentSession(input.session_id, at);
   if (!session) throw new Error(`Active agent session not found: ${input.session_id}`);
   heartbeatAgentSession({ session_id: input.session_id, ttl_minutes: input.ttl_minutes });
@@ -812,6 +823,22 @@ function getIssueClaim(id: string) {
     WHERE c.id = @id
   `).get({ id });
   return row ? hydrateIssueClaim(row) : null;
+}
+
+function getClaimableIssue(issueId: string) {
+  return db.prepare("SELECT id, identifier, status, status_type, archived_at FROM issues WHERE id = @id").get({ id: issueId }) as Record<string, unknown>;
+}
+
+function assertIssueOpenForAgentWrite(issue: Record<string, unknown>, allowClosed: unknown, action: string) {
+  if (booleanValue(allowClosed, false)) return;
+  const label = issueLabel(issue);
+  if (issue.archived_at) {
+    throw new Error(`Issue ${label} is archived; restore it before trying to ${action} it, or pass allow_closed:true for deliberate historical maintenance.`);
+  }
+  const statusType = inferStatusType(stringValue(issue.status) ?? undefined) ?? knownStatusType(stringValue(issue.status_type) ?? undefined);
+  if (statusType === "completed" || statusType === "canceled") {
+    throw new Error(`Issue ${label} is ${statusType}; reopen it with save_issue before trying to ${action} it, or pass allow_closed:true for deliberate historical maintenance.`);
+  }
 }
 
 function activeIssueClaims(issueId: string, at = nowIso()) {

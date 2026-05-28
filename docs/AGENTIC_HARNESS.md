@@ -193,6 +193,7 @@ Claim rules:
 - One active claim may own an issue at a time.
 - The same session can renew its claim idempotently.
 - A different session must wait for expiry or use `force=true` with a clear comment.
+- `Done`, `Canceled`, and archived issues cannot be claimed or commented on by default. Reopen the issue first; use `allow_closed:true` only for deliberate historical maintenance.
 - Ending a session releases its active claims by default.
 - Completing work should release the claim with `status:"completed"` and leave acceptance evidence.
 

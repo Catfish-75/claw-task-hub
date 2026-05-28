@@ -74,6 +74,8 @@ $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
 npm run hub -- tools/call claim_issue "base64:$b64"
 ```
 
+`claim_issue` and `save_comment` are intentionally conservative for agent workflows: `Done`, `Canceled`, and archived issues cannot be claimed or commented on by default. Reopen the issue first; use `allow_closed:true` only for deliberate historical maintenance.
+
 Add acceptance evidence and close:
 
 ```powershell

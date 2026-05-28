@@ -345,6 +345,35 @@ try {
     status: "Done",
   }).issue;
   assert(completed.status_type === "completed", "save_issue did not derive completed status_type");
+  const completedClaimFailure = runHubExpectFailure("claim_issue", {
+    issue_id: completed.identifier,
+    session_id: session.id,
+  });
+  assert(completedClaimFailure.status !== 0, "claim_issue on a completed issue unexpectedly succeeded");
+  assert(completedClaimFailure.stderr.includes(`Issue ${completed.identifier} is completed`), "claim_issue completed guard did not explain the closed issue");
+  const completedCommentFailure = runHubExpectFailure("save_comment", {
+    issue_id: completed.identifier,
+    body: "This should not silently attach to completed work.",
+  });
+  assert(completedCommentFailure.status !== 0, "save_comment on a completed issue unexpectedly succeeded");
+  assert(completedCommentFailure.stderr.includes(`Issue ${completed.identifier} is completed`), "save_comment completed guard did not explain the closed issue");
+  const completedCommentOverride = runHub("tools/call", "save_comment", {
+    issue_id: completed.identifier,
+    body: "Deliberate historical maintenance note.",
+    allow_closed: true,
+  }).comment;
+  assert(completedCommentOverride.issue_id === completed.id, "save_comment allow_closed did not target the completed issue");
+  const completedClaimOverride = runHub("tools/call", "claim_issue", {
+    issue_id: completed.identifier,
+    session_id: session.id,
+    allow_closed: true,
+    ttl_minutes: 30,
+  }).claim;
+  assert(completedClaimOverride.identifier === completed.identifier, "claim_issue allow_closed did not target the completed issue");
+  runHub("tools/call", "release_issue_claim", {
+    claim_id: completedClaimOverride.id,
+    status: "released",
+  });
 
   const activeIssue = runHub("tools/call", "save_issue", {
     title: "Harness active discovery issue",
