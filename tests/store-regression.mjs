@@ -24,6 +24,7 @@ try {
     heartbeatAgentSession,
     listAgentSessions,
     listIssueClaims,
+    listIssueGroups,
     listIssues,
     releaseIssueClaim,
     repairIssueInvariants,
@@ -385,7 +386,7 @@ try {
     project_id: largeProject.id,
     updated_at: "2026-01-01T00:00:00.000Z",
   });
-  for (let index = 0; index < 84; index += 1) {
+  for (let index = 0; index < 120; index += 1) {
     upsertIssue({
       title: `Newer project filler ${index + 1}`,
       identifier: `CTH-${900100 + index}`,
@@ -396,6 +397,23 @@ try {
   }
   const largeProjectDetail = getProject(largeProject.id);
   assert(largeProjectDetail.issues.some((issue) => issue.id === olderPaused.id), "project detail omitted an older paused issue beyond the first 80 rows");
+  const largeTodoGroup = largeProjectDetail.issueGroups.find((group) => group.status_type === "unstarted");
+  const largePausedGroup = largeProjectDetail.issueGroups.find((group) => group.status_type === "paused");
+  assert(largeTodoGroup.returned === 50, `project detail default did not return 50 Todo issues: ${largeTodoGroup.returned}`);
+  assert(largeTodoGroup.total === 120, `project detail Todo total is wrong: ${largeTodoGroup.total}`);
+  assert(largeTodoGroup.truncated === true, "project detail Todo group did not report truncation");
+  assert(largePausedGroup.returned === 1 && largePausedGroup.total === 1, "project detail per-status grouping hid the older paused issue");
+  const largeProjectGroups100 = listIssueGroups({ project_id: largeProject.id }, 100);
+  const todo100 = largeProjectGroups100.find((group) => group.status_type === "unstarted");
+  assert(todo100.returned === 100 && todo100.total === 120 && todo100.truncated === true, "100 per-status limit did not return 100 of 120 Todo issues");
+  const todoOnlyGroups = listIssueGroups({ project_id: largeProject.id, status_type: "unstarted" }, 50);
+  assert(todoOnlyGroups.length === 1 && todoOnlyGroups[0].status_type === "unstarted", "grouped issue API ignored an explicit status_type filter");
+  const largeProjectGroups200 = listIssueGroups({ project_id: largeProject.id }, 200);
+  const todo200 = largeProjectGroups200.find((group) => group.status_type === "unstarted");
+  assert(todo200.returned === 120 && todo200.total === 120 && todo200.truncated === false, "200 per-status limit did not include all 120 Todo issues");
+  const largeProjectAll = getProject(largeProject.id, { issues_per_status: "all" });
+  const allTodo = largeProjectAll.issueGroups.find((group) => group.status_type === "unstarted");
+  assert(allTodo.returned === 120 && allTodo.truncated === false, "all per-status limit did not include every Todo issue");
 
   const oldComment = saveComment({ issue_id: created.id, body: "Older null external id comment", author: "Test" });
   const visibleComment = saveComment({ issue_id: "SAV-900001", body: "Visible identifier comment", author: "Agent" });

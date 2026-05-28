@@ -497,6 +497,27 @@ button {
   flex: 1;
 }
 
+.issue-limit-control {
+  height: 34px;
+  min-width: 126px;
+  border: 1px solid var(--line2);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.issue-limit-control select {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  outline: 0;
+  font-weight: 700;
+}
+
 .mode-row {
   min-width: 0;
   display: flex;
@@ -959,6 +980,14 @@ button {
 
   .issue-filter-row {
     grid-template-columns: minmax(0, 1fr) 30px 30px;
+  }
+
+  .issue-limit-control {
+    min-width: 70px;
+  }
+
+  .issue-limit-control span {
+    display: none;
   }
 
   .linear-create {

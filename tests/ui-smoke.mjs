@@ -4,6 +4,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import Database from "better-sqlite3";
 
 const tempDir = mkdtempSync(join(tmpdir(), "claw-task-hub-ui-smoke-"));
 const apiPort = await getFreePort();
@@ -79,6 +80,33 @@ function runHub(tool, payload = {}) {
   return JSON.parse(runNpm(["run", "-s", "hub", "--", "tools/call", tool, `base64:${b64}`]));
 }
 
+function seedBulkTodoIssues(count) {
+  const database = new Database(env.CLAW_TASK_HUB_DB);
+  try {
+    const insert = database.prepare(`
+      INSERT INTO issues (id, identifier, title, description, status, status_type, priority, project_id, team_id, labels, source, created_at, updated_at)
+      VALUES (@id, @identifier, @title, @description, 'Todo', 'unstarted', 3, 'project_claw_task_hub_mvp', 'team_local', @labels, 'local', @created_at, @updated_at)
+    `);
+    const transaction = database.transaction(() => {
+      for (let index = 0; index < count; index += 1) {
+        const day = String((index % 28) + 1).padStart(2, "0");
+        insert.run({
+          id: `ui_limit_bulk_${index}`,
+          identifier: `CTH-${960000 + index}`,
+          title: `UI smoke per-status limit filler ${index + 1}`,
+          description: "Seeded to verify per-status issue display limits.",
+          labels: JSON.stringify(["ui-smoke", "display-limit"]),
+          created_at: `2026-04-${day}T00:00:00.000Z`,
+          updated_at: `2026-04-${day}T00:00:00.000Z`,
+        });
+      }
+    });
+    transaction();
+  } finally {
+    database.close();
+  }
+}
+
 function getFreePort() {
   return new Promise((resolve, reject) => {
     const server = createServer();
@@ -147,6 +175,13 @@ async function assertNoDuplicateVisibleIssueCodes(scopeLabel) {
   assert(duplicates.length === 0, `Issue rows are duplicated in ${scopeLabel}: ${[...new Set(duplicates)].join(", ")}`);
 }
 
+async function countRowsInGroup(label) {
+  return page.locator(".issue-group").evaluateAll((groups, groupLabel) => {
+    const group = groups.find((node) => node.querySelector(".group-head strong")?.textContent?.trim() === groupLabel);
+    return group?.querySelectorAll(".linear-issue-row").length ?? 0;
+  }, label);
+}
+
 async function waitForAppShell() {
   try {
     await page.locator(".linear-shell").waitFor({ state: "visible", timeout: 30000 });
@@ -165,6 +200,7 @@ async function waitForAppShell() {
 
 try {
 runNpm(["run", "-s", "seed"]);
+seedBulkTodoIssues(70);
 runHub("save_issue", {
   id: "LOCAL-3",
   external_id: "LOCAL-3",
@@ -185,6 +221,18 @@ runHub("save_issue", {
   description: "Seeded by UI smoke to verify todo filtering.",
   project_id: "project_claw_task_hub_mvp",
   status: "Todo",
+  priority: 3,
+  labels: ["ui-smoke"],
+  source: "local",
+});
+runHub("save_issue", {
+  id: "LOCAL-5",
+  external_id: "LOCAL-5",
+  identifier: "LOCAL-5",
+  title: "Verify canceled issue status",
+  description: "Seeded by UI smoke to verify canceled grouping.",
+  project_id: "project_claw_task_hub_mvp",
+  status: "Canceled",
   priority: 3,
   labels: ["ui-smoke"],
   source: "local",
@@ -234,6 +282,28 @@ assert(
 const issueRowCount = await page.locator(".linear-issue-row").count();
 assert(issueRowCount > 0, "issue rows are missing");
 await assertNoDuplicateVisibleIssueCodes("seed project");
+const limitSelect = page.getByLabel("Issues per status");
+assert(await limitSelect.isVisible(), "Per-status issue limit selector is missing");
+assert((await limitSelect.inputValue()) === "50", "Per-status issue limit did not default to 50");
+await page.getByRole("button", { name: "Todo", exact: true }).click();
+const todoRowsAt50 = await countRowsInGroup("Todo");
+assert(todoRowsAt50 === 50, `Todo group did not show exactly 50 rows at the default per-status limit: ${todoRowsAt50}`);
+const projectLimitRequest = page.waitForResponse((response) => {
+  const url = new URL(response.url());
+  return url.pathname === "/api/projects/project_claw_task_hub_mvp" && url.searchParams.get("issues_per_status") === "100" && response.ok();
+});
+await limitSelect.selectOption("100");
+await projectLimitRequest;
+await page.waitForFunction(() => {
+  const group = [...document.querySelectorAll(".issue-group")]
+    .find((node) => node.querySelector(".group-head strong")?.textContent?.trim() === "Todo");
+  return (group?.querySelectorAll(".linear-issue-row").length ?? 0) > 50;
+});
+const todoRowsAt100 = await countRowsInGroup("Todo");
+assert(todoRowsAt100 > todoRowsAt50, `Todo group did not expand after selecting 100 per status: ${todoRowsAt100}`);
+await page.getByRole("button", { name: "All statuses", exact: true }).click();
+const allGroupLabelsAfterLimitChange = (await page.locator(".group-head strong").allTextContents()).map((label) => label.trim());
+assert(allGroupLabelsAfterLimitChange.includes("Canceled"), "Canceled issues are not shown as a status group");
 const createdTitle = `UI smoke routed issue ${Date.now()}`;
 await page.locator(".linear-create input[name='title']").fill(createdTitle);
 await page.locator(".linear-create input[name='description']").fill("Created from a project page to verify issue routing.");

@@ -2,7 +2,21 @@ import cors from "cors";
 import express from "express";
 import { z } from "zod";
 import { dbPath } from "./db.js";
-import { dashboard, ensureDefaultTeam, getIssue, getProject, listIssues, listProjects, listTeams, recentSyncRuns, saveComment, upsertIssue, upsertProject } from "./store.js";
+import {
+  dashboard,
+  ensureDefaultTeam,
+  getIssue,
+  getProject,
+  listIssueGroups,
+  listIssues,
+  listProjects,
+  listTeams,
+  parseIssueDisplayLimit,
+  recentSyncRuns,
+  saveComment,
+  upsertIssue,
+  upsertProject,
+} from "./store.js";
 
 ensureDefaultTeam();
 
@@ -55,7 +69,7 @@ app.get("/api/sync-runs", (_req, res) => res.json({ runs: recentSyncRuns() }));
 app.get("/api/teams", (_req, res) => res.json({ teams: listTeams() }));
 app.get("/api/projects", (_req, res) => res.json({ projects: listProjects() }));
 app.get("/api/projects/:id", (req, res) => {
-  const project = getProject(req.params.id);
+  const project = getProject(req.params.id, { issues_per_status: req.query.issues_per_status });
   if (!project) return res.status(404).json({ error: "Project not found" });
   res.json(project);
 });
@@ -72,20 +86,29 @@ app.post("/api/projects", (req, res) => {
 });
 
 app.get("/api/issues", (req, res) => {
-  res.json({
-    issues: listIssues({
-      project: req.query.project as string | undefined,
-      project_id: req.query.project_id as string | undefined,
-      team: req.query.team as string | undefined,
-      team_id: req.query.team_id as string | undefined,
-      status: req.query.status as string | undefined,
-      status_type: req.query.status_type as string | undefined,
-      include_done: req.query.include_done as string | undefined,
-      query: req.query.query as string | undefined,
-      limit: req.query.limit ? Number(req.query.limit) : undefined,
-      offset: req.query.offset ? Number(req.query.offset) : undefined,
-    }),
-  });
+  const filters = {
+    project: req.query.project as string | undefined,
+    project_id: req.query.project_id as string | undefined,
+    team: req.query.team as string | undefined,
+    team_id: req.query.team_id as string | undefined,
+    status: req.query.status as string | undefined,
+    status_type: req.query.status_type as string | undefined,
+    include_done: req.query.include_done as string | undefined,
+    query: req.query.query as string | undefined,
+    limit: req.query.limit ? Number(req.query.limit) : undefined,
+    offset: req.query.offset ? Number(req.query.offset) : undefined,
+  };
+  if (req.query.per_status_limit) {
+    const issueDisplayLimit = parseIssueDisplayLimit(req.query.per_status_limit);
+    const issueGroups = listIssueGroups(filters, issueDisplayLimit);
+    res.json({
+      issues: issueGroups.flatMap((group) => group.issues),
+      issueGroups,
+      issueDisplayLimit,
+    });
+    return;
+  }
+  res.json({ issues: listIssues(filters) });
 });
 
 app.get("/api/issues/:id", (req, res) => {

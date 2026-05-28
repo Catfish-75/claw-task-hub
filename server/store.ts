@@ -62,6 +62,28 @@ export type IssueInput = {
 };
 
 type FilterValue = string | string[] | null | undefined;
+type ListIssueFilters = {
+  project?: string;
+  project_id?: string;
+  team?: string;
+  team_id?: string;
+  status?: FilterValue;
+  status_type?: FilterValue;
+  include_done?: boolean | string | number | null;
+  query?: string;
+  limit?: number;
+  offset?: number;
+};
+export type IssueDisplayLimit = 50 | 100 | 200 | "all";
+export type IssueGroup = {
+  key: string;
+  status_type: string;
+  label: string;
+  total: number;
+  returned: number;
+  truncated: boolean;
+  issues: unknown[];
+};
 type AgentSessionInput = { id?: string; agent_name: string; harness?: string | null; ttl_minutes?: number; metadata?: unknown };
 type ClaimIssueInput = {
   issue_id: string;
@@ -86,6 +108,17 @@ type HydratedIssueClaim = Record<string, unknown> & {
   expires_at?: string;
   released_at?: string | null;
 };
+const issueStatusGroups = [
+  { status_type: "started", label: "In Progress" },
+  { status_type: "blocked", label: "Blocked" },
+  { status_type: "paused", label: "Paused" },
+  { status_type: "backlog", label: "Backlog" },
+  { status_type: "unstarted", label: "Todo" },
+  { status_type: "completed", label: "Done" },
+  { status_type: "canceled", label: "Canceled" },
+];
+const issueDisplayLimitChoices = new Set(["50", "100", "200", "all"]);
+const groupedIssueAllLimit = 100000;
 
 export function makeId(prefix: string) {
   return `${prefix}_${nanoid()}`;
@@ -138,10 +171,12 @@ export function listProjects() {
   `).all();
 }
 
-export function getProject(id: string) {
+export function getProject(id: string, options: { issues_per_status?: unknown } = {}) {
   ensureIssueIdentifiers();
   const project = db.prepare("SELECT * FROM projects WHERE id = @id OR external_id = @id").get({ id }) as Record<string, unknown> | undefined;
   if (!project) return null;
+  const issueDisplayLimit = parseIssueDisplayLimit(options.issues_per_status, 50);
+  const issueGroups = listIssueGroups({ project: String(project.id) }, issueDisplayLimit);
   const issues = listIssues({ project: String(project.id), limit: 250 });
   const statusCounts = db.prepare(`
     SELECT status, ${normalizedStatusTypeSql} AS status_type, COUNT(*) AS count
@@ -210,7 +245,7 @@ export function getProject(id: string) {
   const activity = [...issueEvents, ...commentEvents]
     .sort((a, b) => String((b as { updated_at: string }).updated_at).localeCompare(String((a as { updated_at: string }).updated_at)))
     .slice(0, 50);
-  return { project, counts, statusCounts, priorityCounts, issues, activity };
+  return { project, counts, statusCounts, priorityCounts, issues, issueGroups, issueDisplayLimit, activity };
 }
 
 export function upsertProject(input: {
@@ -241,40 +276,60 @@ export function upsertProject(input: {
   return db.prepare("SELECT * FROM projects WHERE external_id IS @external_id OR id = @id").get(row);
 }
 
-export function listIssues(filters: { project?: string; project_id?: string; team?: string; team_id?: string; status?: FilterValue; status_type?: FilterValue; include_done?: boolean | string | number | null; query?: string; limit?: number; offset?: number }) {
+export function listIssues(filters: ListIssueFilters) {
+  return listIssuesInternal(filters, 250);
+}
+
+export function listIssueGroups(filters: ListIssueFilters, limitInput: unknown = 50): IssueGroup[] {
+  const issueDisplayLimit = parseIssueDisplayLimit(limitInput, 50);
+  const effectiveLimit = issueDisplayLimit === "all" ? groupedIssueAllLimit : issueDisplayLimit;
+  const includeDone = booleanValue(filters.include_done, true);
+  const requestedStatusTypes = groupedRequestedStatusTypes(filters);
+  return issueStatusGroups
+    .filter((group) => includeDone || !["completed", "canceled"].includes(group.status_type))
+    .filter((group) => !requestedStatusTypes || requestedStatusTypes.has(group.status_type))
+    .map((group) => {
+      const groupFilters = {
+        ...filters,
+        status: undefined,
+        status_type: group.status_type,
+        limit: effectiveLimit,
+        offset: 0,
+      };
+      const total = countIssues(groupFilters);
+      const issues = total ? listIssuesInternal(groupFilters, groupedIssueAllLimit) : [];
+      return {
+        key: group.status_type,
+        status_type: group.status_type,
+        label: group.label,
+        total,
+        returned: issues.length,
+        truncated: total > issues.length,
+        issues,
+      };
+    })
+    .filter((group) => group.total > 0);
+}
+
+function groupedRequestedStatusTypes(filters: ListIssueFilters) {
+  const values = [...filterValues(filters.status), ...filterValues(filters.status_type)];
+  const normalized = unique(values.map((value) => inferStatusType(value) ?? knownStatusType(value) ?? value).filter(isString));
+  return normalized.length ? new Set(normalized) : null;
+}
+
+export function parseIssueDisplayLimit(value: unknown, fallback: IssueDisplayLimit = 50): IssueDisplayLimit {
+  const normalized = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (issueDisplayLimitChoices.has(normalized)) return normalized === "all" ? "all" : (Number(normalized) as IssueDisplayLimit);
+  return fallback;
+}
+
+function listIssuesInternal(filters: ListIssueFilters, maxLimit: number) {
   ensureIssueIdentifiers();
-  const limit = boundedNumber(filters.limit, 50, 1, 250);
+  const limit = boundedNumber(filters.limit, 50, 1, maxLimit);
   const offset = boundedNumber(filters.offset, 0, 0, 100000);
-  const query = typeof filters.query === "string" ? filters.query.trim() : "";
-  const projectFilter = filters.project ?? filters.project_id;
-  const teamFilter = filters.team ?? filters.team_id;
-  const where: string[] = ["i.archived_at IS NULL"];
-  const params: Record<string, unknown> = { limit, offset, active_at: nowIso() };
-  if (projectFilter) {
-    where.push("(i.project_id = @project OR p.name = @project OR p.external_id = @project)");
-    params.project = projectFilter;
-  }
-  if (teamFilter) {
-    where.push("(i.team_id = @team OR t.name = @team OR t.external_id = @team)");
-    params.team = teamFilter;
-  }
-  const statusValues = filterValues(filters.status);
-  if (statusValues.length) {
-    const statusTypes = unique(statusValues.map((value) => inferStatusType(value) ?? knownStatusType(value)).filter(isString));
-    const rawStatuses = statusValues.filter((value) => !inferStatusType(value) && !knownStatusType(value));
-    const clauses: string[] = [];
-    if (statusTypes.length) clauses.push(inClause(normalizedIssueStatusTypeSql, "status_type", statusTypes, params));
-    if (rawStatuses.length) clauses.push(inClause("i.status", "status", rawStatuses, params));
-    where.push(`(${clauses.join(" OR ")})`);
-  }
-  const statusTypeValues = filterValues(filters.status_type);
-  if (statusTypeValues.length) {
-    const normalized = unique(statusTypeValues.map((value) => inferStatusType(value) ?? knownStatusType(value) ?? value));
-    where.push(inClause(normalizedIssueStatusTypeSql, "status_type_filter", normalized, params));
-  }
-  if (!booleanValue(filters.include_done, true)) {
-    where.push(`${normalizedIssueStatusTypeSql} NOT IN ('completed', 'canceled')`);
-  }
+  const { where, params, orderBy } = issueQueryParts(filters);
+  params.limit = limit;
+  params.offset = offset;
   let sql = `
     SELECT
       i.*,
@@ -329,6 +384,54 @@ export function listIssues(filters: { project?: string; project_id?: string; tea
     LEFT JOIN projects p ON p.id = i.project_id
     LEFT JOIN teams t ON t.id = i.team_id
   `;
+  sql += ` WHERE ${where.join(" AND ")} ORDER BY ${orderBy} LIMIT @limit OFFSET @offset`;
+  return db.prepare(sql).all(params).map(hydrateIssue);
+}
+
+function countIssues(filters: ListIssueFilters) {
+  ensureIssueIdentifiers();
+  const { where, params } = issueQueryParts(filters);
+  const row = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM issues i
+    LEFT JOIN projects p ON p.id = i.project_id
+    LEFT JOIN teams t ON t.id = i.team_id
+    WHERE ${where.join(" AND ")}
+  `).get(params) as { count: number };
+  return Number(row.count ?? 0);
+}
+
+function issueQueryParts(filters: ListIssueFilters) {
+  const query = typeof filters.query === "string" ? filters.query.trim() : "";
+  const projectFilter = filters.project ?? filters.project_id;
+  const teamFilter = filters.team ?? filters.team_id;
+  const where: string[] = ["i.archived_at IS NULL"];
+  const params: Record<string, unknown> = { active_at: nowIso() };
+  if (projectFilter) {
+    where.push("(i.project_id = @project OR p.name = @project OR p.external_id = @project)");
+    params.project = projectFilter;
+  }
+  if (teamFilter) {
+    where.push("(i.team_id = @team OR t.name = @team OR t.external_id = @team)");
+    params.team = teamFilter;
+  }
+  const statusValues = filterValues(filters.status);
+  if (statusValues.length) {
+    const statusTypes = unique(statusValues.map((value) => inferStatusType(value) ?? knownStatusType(value)).filter(isString));
+    const rawStatuses = statusValues.filter((value) => !inferStatusType(value) && !knownStatusType(value));
+    const clauses: string[] = [];
+    if (statusTypes.length) clauses.push(inClause(normalizedIssueStatusTypeSql, "status_type", statusTypes, params));
+    if (rawStatuses.length) clauses.push(inClause("i.status", "status", rawStatuses, params));
+    where.push(`(${clauses.join(" OR ")})`);
+  }
+  const statusTypeValues = filterValues(filters.status_type);
+  if (statusTypeValues.length) {
+    const normalized = unique(statusTypeValues.map((value) => inferStatusType(value) ?? knownStatusType(value) ?? value));
+    where.push(inClause(normalizedIssueStatusTypeSql, "status_type_filter", normalized, params));
+  }
+  if (!booleanValue(filters.include_done, true)) {
+    where.push(`${normalizedIssueStatusTypeSql} NOT IN ('completed', 'canceled')`);
+  }
   let orderBy = "i.updated_at DESC";
   if (query) {
     where.push(`(
@@ -355,8 +458,7 @@ export function listIssues(filters: { project?: string; project_id?: string; tea
       i.updated_at DESC
     `;
   }
-  sql += ` WHERE ${where.join(" AND ")} ORDER BY ${orderBy} LIMIT @limit OFFSET @offset`;
-  return db.prepare(sql).all(params).map(hydrateIssue);
+  return { where, params, orderBy };
 }
 
 function ftsQuery(value: string) {

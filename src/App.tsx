@@ -73,6 +73,28 @@ type IssueClaim = {
 };
 
 type StatusMode = "all" | "active" | "paused" | "backlog" | "todo" | "blockers";
+type IssueDisplayLimit = "50" | "100" | "200" | "all";
+type IssueStatusType = "started" | "blocked" | "paused" | "backlog" | "unstarted" | "completed" | "canceled";
+
+type ApiIssueGroup = {
+  key: string;
+  status_type: IssueStatusType;
+  label: string;
+  total: number;
+  returned: number;
+  truncated: boolean;
+  issues: Issue[];
+};
+
+type UiIssueGroup = {
+  key: string;
+  statusType: IssueStatusType;
+  label: string;
+  total: number;
+  returned: number;
+  truncated: boolean;
+  items: Issue[];
+};
 
 type ActivityEvent = {
   id: string;
@@ -94,6 +116,8 @@ type ProjectDetail = {
   statusCounts: { status: string; status_type: string; count: number }[];
   priorityCounts: { priority: number; count: number }[];
   issues: Issue[];
+  issueGroups?: ApiIssueGroup[];
+  issueDisplayLimit?: IssueDisplayLimit;
   activity: ActivityEvent[];
 };
 
@@ -105,6 +129,7 @@ type Dashboard = {
 
 const apiBase = import.meta.env.VITE_CLAW_TASK_HUB_API_BASE ?? "http://127.0.0.1:4781/api";
 const displayDateLocale = "en-US";
+const defaultIssueDisplayLimit: IssueDisplayLimit = "50";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${apiBase}${path}`, {
@@ -118,6 +143,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [workspaceIssues, setWorkspaceIssues] = useState<Issue[]>([]);
+  const [workspaceIssueGroups, setWorkspaceIssueGroups] = useState<ApiIssueGroup[]>([]);
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [serverSearchResult, setServerSearchResult] = useState<{ scope: string; query: string; issues: Issue[] } | null>(null);
@@ -125,10 +151,12 @@ function App() {
   const [tab, setTab] = useState<"overview" | "activity" | "issues">("overview");
   const [query, setQuery] = useState("");
   const [statusMode, setStatusMode] = useState<StatusMode>("all");
+  const [issueDisplayLimit, setIssueDisplayLimit] = useState<IssueDisplayLimit>(defaultIssueDisplayLimit);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const pageRef = useRef<"projects" | "workspace" | "project">("projects");
+  const issueDisplayLimitRef = useRef<IssueDisplayLimit>(defaultIssueDisplayLimit);
   const projectDetailRef = useRef<ProjectDetail | null>(null);
   const selectedIssueRef = useRef<Issue | null>(null);
   const refreshInFlightRef = useRef(false);
@@ -147,6 +175,10 @@ function App() {
     selectedIssueRef.current = selectedIssue;
   }, [selectedIssue]);
 
+  useEffect(() => {
+    issueDisplayLimitRef.current = issueDisplayLimit;
+  }, [issueDisplayLimit]);
+
   const refresh = useCallback(async (force = false) => {
     if (refreshInFlightRef.current) return;
     const startedAt = Date.now();
@@ -157,18 +189,22 @@ function App() {
       page: pageRef.current,
       projectId: projectDetailRef.current?.project.id,
       issueId: selectedIssueRef.current?.id,
+      issueDisplayLimit: issueDisplayLimitRef.current,
     };
     try {
       const [dash, proj, issueList, detail, selected] = await Promise.all([
       api<Dashboard>("/dashboard"),
       api<{ projects: Project[] }>("/projects"),
-      api<{ issues: Issue[] }>("/issues?limit=250"),
-      snapshot.page === "project" && snapshot.projectId ? api<ProjectDetail>(`/projects/${encodeURIComponent(snapshot.projectId)}`) : Promise.resolve(null),
+      api<{ issues: Issue[]; issueGroups?: ApiIssueGroup[] }>(`/issues?per_status_limit=${encodeURIComponent(snapshot.issueDisplayLimit)}`),
+      snapshot.page === "project" && snapshot.projectId
+        ? api<ProjectDetail>(`/projects/${encodeURIComponent(snapshot.projectId)}?issues_per_status=${encodeURIComponent(snapshot.issueDisplayLimit)}`)
+        : Promise.resolve(null),
       snapshot.issueId ? api<{ issue: Issue }>(`/issues/${encodeURIComponent(snapshot.issueId)}`).catch(() => null) : Promise.resolve(null),
       ]);
       void dash;
       setProjects(proj.projects);
       setWorkspaceIssues(issueList.issues);
+      setWorkspaceIssueGroups(issueList.issueGroups ?? []);
       const samePage = pageRef.current === snapshot.page;
       const sameProject = projectDetailRef.current?.project.id === snapshot.projectId;
       const sameIssueContext = samePage && (snapshot.page !== "project" || sameProject);
@@ -227,7 +263,7 @@ function App() {
   }, [page, projectDetail?.project.id, query]);
 
   async function openProject(project: Project, nextTab: "overview" | "activity" | "issues" = "overview") {
-    const detail = await api<ProjectDetail>(`/projects/${encodeURIComponent(project.id)}`);
+    const detail = await api<ProjectDetail>(`/projects/${encodeURIComponent(project.id)}?issues_per_status=${encodeURIComponent(issueDisplayLimitRef.current)}`);
     setProjectDetail(detail);
     setSelectedIssue(detail.issues[0] ?? null);
     setPage("project");
@@ -235,6 +271,12 @@ function App() {
     setQuery("");
     setStatusMode("all");
     setCreateError(null);
+  }
+
+  function changeIssueDisplayLimit(value: IssueDisplayLimit) {
+    issueDisplayLimitRef.current = value;
+    setIssueDisplayLimit(value);
+    void refresh(true);
   }
 
   async function openIssue(issue: Issue, reveal = false) {
@@ -315,6 +357,14 @@ function App() {
       return matchesText && matchesMode;
     });
   }, [matchingServerSearch, projectDetail?.issues, statusMode, trimmedQuery, workspaceIssues]);
+  const sourceIssueGroups = trimmedQuery ? null : projectDetail?.issueGroups ?? workspaceIssueGroups;
+  const visibleIssueGroups = useMemo(() => {
+    if (trimmedQuery || statusMode === "blockers" || !sourceIssueGroups?.length) return groupIssues(filteredIssues);
+    return sourceIssueGroups
+      .map(apiGroupToUiGroup)
+      .filter((group) => groupMatchesStatusMode(group.statusType, statusMode))
+      .filter((group) => group.items.length);
+  }, [filteredIssues, sourceIssueGroups, statusMode, trimmedQuery]);
 
   return (
     <main className="linear-shell">
@@ -346,14 +396,17 @@ function App() {
           <IssuesPage
             title="All issues"
             issues={filteredIssues}
+            issueGroups={visibleIssueGroups}
             selectedIssue={selectedIssue}
             query={query}
             statusMode={statusMode}
+            issueDisplayLimit={issueDisplayLimit}
             creating={creating}
             createError={createError}
             canCreate={false}
             onQuery={setQuery}
             onStatusMode={setStatusMode}
+            onIssueDisplayLimit={changeIssueDisplayLimit}
             onCreate={createIssue}
             onOpenIssue={openIssue}
             onAddComment={addComment}
@@ -366,14 +419,17 @@ function App() {
           <IssuesPage
             title={projectDetail.project.name}
             issues={filteredIssues}
+            issueGroups={visibleIssueGroups}
             selectedIssue={selectedIssue}
             query={query}
             statusMode={statusMode}
+            issueDisplayLimit={issueDisplayLimit}
             creating={creating}
             createError={createError}
             canCreate={true}
             onQuery={setQuery}
             onStatusMode={setStatusMode}
+            onIssueDisplayLimit={changeIssueDisplayLimit}
             onCreate={createIssue}
             onOpenIssue={openIssue}
             onAddComment={addComment}
@@ -571,37 +627,53 @@ function ProjectActivity({ detail }: { detail: ProjectDetail }) {
 function IssuesPage({
   title,
   issues,
+  issueGroups,
   selectedIssue,
   query,
   statusMode,
+  issueDisplayLimit,
   creating,
   createError,
   canCreate,
   onQuery,
   onStatusMode,
+  onIssueDisplayLimit,
   onCreate,
   onOpenIssue,
   onAddComment,
 }: {
   title: string;
   issues: Issue[];
+  issueGroups: UiIssueGroup[];
   selectedIssue: Issue | null;
   query: string;
   statusMode: StatusMode;
+  issueDisplayLimit: IssueDisplayLimit;
   creating: boolean;
   createError: string | null;
   canCreate: boolean;
   onQuery: (value: string) => void;
   onStatusMode: (mode: StatusMode) => void;
+  onIssueDisplayLimit: (value: IssueDisplayLimit) => void;
   onCreate: (event: FormEvent<HTMLFormElement>) => void;
   onOpenIssue: (issue: Issue, reveal?: boolean) => void;
   onAddComment: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const grouped = groupIssues(issues);
+  void issues;
+  const grouped = issueGroups;
   return (
     <section className="issues-screen">
       <div className="issue-filter-row">
         <div className="searchbar"><Search size={16} /><input value={query} onChange={(event) => onQuery(event.target.value)} placeholder={`Search ${title}`} /></div>
+        <label className="issue-limit-control">
+          <span>Per status</span>
+          <select aria-label="Issues per status" value={issueDisplayLimit} onChange={(event) => onIssueDisplayLimit(event.target.value as IssueDisplayLimit)}>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="all">All</option>
+          </select>
+        </label>
         <button className="round-icon"><ListFilter size={15} /></button>
         <button className="round-icon"><SlidersHorizontal size={15} /></button>
       </div>
@@ -634,7 +706,7 @@ function IssuesPage({
             <div className="empty-list">No issues found</div>
           ) : grouped.map((group) => (
             <div key={group.key} className="issue-group">
-              <div className="group-head"><span>⌄</span><StatusIcon statusType={group.statusType} /><strong>{group.label}</strong><em>{group.items.length}</em><button><Plus size={14} /></button></div>
+              <div className="group-head"><span>⌄</span><StatusIcon statusType={group.statusType} /><strong>{group.label}</strong><em>{groupCountLabel(group)}</em><button><Plus size={14} /></button></div>
               {group.items.map((issue) => {
                 const statusType = resolveUiStatusType(issue);
                 return (
@@ -792,20 +864,50 @@ function shortAgentName(label: string) {
   return parts[0].length <= 10 ? parts[0] : `${parts[0].slice(0, 9)}...`;
 }
 
-function groupIssues(issues: Issue[]) {
-  const order = [
+function apiGroupToUiGroup(group: ApiIssueGroup): UiIssueGroup {
+  return {
+    key: group.key,
+    statusType: group.status_type,
+    label: group.label,
+    total: group.total,
+    returned: group.returned,
+    truncated: group.truncated,
+    items: group.issues,
+  };
+}
+
+function groupMatchesStatusMode(statusType: IssueStatusType, statusMode: StatusMode) {
+  return (
+    statusMode === "all" ||
+    (statusMode === "active" && ["started", "blocked", "paused"].includes(statusType)) ||
+    (statusMode === "paused" && statusType === "paused") ||
+    (statusMode === "backlog" && statusType === "backlog") ||
+    (statusMode === "todo" && statusType === "unstarted")
+  );
+}
+
+function groupCountLabel(group: UiIssueGroup) {
+  return group.truncated ? `${group.returned}/${group.total}` : String(group.total);
+}
+
+function groupIssues(issues: Issue[]): UiIssueGroup[] {
+  const order: [IssueStatusType, string][] = [
     ["started", "In Progress"],
     ["blocked", "Blocked"],
     ["paused", "Paused"],
     ["backlog", "Backlog"],
     ["unstarted", "Todo"],
     ["completed", "Done"],
+    ["canceled", "Canceled"],
   ];
   return order
     .map(([statusType, label]) => ({
       key: statusType,
       statusType,
       label,
+      total: issues.filter((issue) => resolveUiStatusType(issue) === statusType).length,
+      returned: issues.filter((issue) => resolveUiStatusType(issue) === statusType).length,
+      truncated: false,
       items: issues.filter((issue) => {
         const resolved = resolveUiStatusType(issue);
         return resolved === statusType;
