@@ -246,6 +246,17 @@ const routedIssues = runHub("list_issues", {
 });
 assert(routedIssues.issues.length === 1, `Project-page issue create did not create exactly one routed issue: ${routedIssues.issues.length}`);
 assert(routedIssues.issues[0].project_id === "project_claw_task_hub_mvp", `Project-page issue was routed to the wrong project: ${routedIssues.issues[0].project_id}`);
+const scopedSearchRequest = page.waitForRequest((request) => {
+  const url = new URL(request.url());
+  return url.pathname === "/api/issues" &&
+    url.searchParams.get("project_id") === "project_claw_task_hub_mvp" &&
+    url.searchParams.get("query") === createdTitle;
+});
+await page.locator(".searchbar input").fill(createdTitle);
+await scopedSearchRequest;
+await page.locator(".linear-issue-row").filter({ hasText: createdTitle }).first().waitFor({ state: "visible", timeout: 10000 });
+await page.locator(".searchbar input").fill("");
+await page.locator(".group-head").first().waitFor({ state: "visible", timeout: 10000 });
 const firstIssueCode = (await page.locator(".linear-issue-row .issue-id").first().textContent())?.trim() ?? "";
 assert(/^[A-Z][A-Z0-9]{1,8}-\d{1,6}$/.test(firstIssueCode), `Issue code is not short/local: ${firstIssueCode}`);
 await page.locator(".linear-issue-row").first().dblclick();

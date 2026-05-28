@@ -20,6 +20,7 @@ try {
     endAgentSession,
     ensureDefaultTeam,
     getIssue,
+    getProject,
     heartbeatAgentSession,
     listAgentSessions,
     listIssueClaims,
@@ -350,6 +351,51 @@ try {
   assert(noCanceled.length === 0, "include_done:false did not exclude explicit canceled status_type");
   const canceledOnly = listIssues({ project_id: filterProject.id, status_type: ["canceled"], limit: 20 });
   assert(canceledOnly.some((issue) => issue.id === projectCanceled.id), "canceled issues are not discoverable through explicit status_type filter");
+
+  const identifierSearchTarget = upsertIssue({
+    title: "Identifier search exact target",
+    identifier: "CTH-900024",
+    description: "This issue should be found by its visible code.",
+    status: "Paused",
+    project_id: filterProject.id,
+    updated_at: "2026-01-01T00:00:00.000Z",
+  });
+  upsertIssue({
+    title: "Identifier search mention only",
+    identifier: "CTH-900025",
+    description: "This row mentions CTH-900024 in text, but should rank after the exact identifier match.",
+    status: "Todo",
+    project_id: filterProject.id,
+    updated_at: "2026-02-01T00:00:00.000Z",
+  });
+  const identifierSearch = listIssues({ project_id: filterProject.id, query: "CTH-900024", limit: 10 });
+  assert(identifierSearch[0]?.id === identifierSearchTarget.id, `identifier search did not rank exact match first: ${identifierSearch[0]?.identifier}`);
+  assert(identifierSearch.some((issue) => issue.id === identifierSearchTarget.id), "identifier search missed the exact issue");
+
+  const largeProject = upsertProject({
+    id: "project_detail_limit_regression",
+    external_id: "project-detail-limit-regression",
+    name: "Project Detail Limit Regression",
+  });
+  const olderPaused = upsertIssue({
+    title: "Older paused project issue",
+    identifier: "CTH-900026",
+    description: "This issue should remain visible in project detail even after many newer issues.",
+    status: "Paused",
+    project_id: largeProject.id,
+    updated_at: "2026-01-01T00:00:00.000Z",
+  });
+  for (let index = 0; index < 84; index += 1) {
+    upsertIssue({
+      title: `Newer project filler ${index + 1}`,
+      identifier: `CTH-${900100 + index}`,
+      status: "Todo",
+      project_id: largeProject.id,
+      updated_at: `2026-02-${String((index % 28) + 1).padStart(2, "0")}T00:00:00.000Z`,
+    });
+  }
+  const largeProjectDetail = getProject(largeProject.id);
+  assert(largeProjectDetail.issues.some((issue) => issue.id === olderPaused.id), "project detail omitted an older paused issue beyond the first 80 rows");
 
   const oldComment = saveComment({ issue_id: created.id, body: "Older null external id comment", author: "Test" });
   const visibleComment = saveComment({ issue_id: "SAV-900001", body: "Visible identifier comment", author: "Agent" });

@@ -38,6 +38,7 @@ type Project = {
 
 type Issue = {
   id: string;
+  external_id?: string | null;
   identifier?: string;
   title: string;
   description?: string;
@@ -119,6 +120,7 @@ function App() {
   const [workspaceIssues, setWorkspaceIssues] = useState<Issue[]>([]);
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const [serverSearchResult, setServerSearchResult] = useState<{ scope: string; query: string; issues: Issue[] } | null>(null);
   const [page, setPage] = useState<"projects" | "workspace" | "project">("projects");
   const [tab, setTab] = useState<"overview" | "activity" | "issues">("overview");
   const [query, setQuery] = useState("");
@@ -204,6 +206,26 @@ function App() {
     };
   }, [refresh]);
 
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    const projectId = page === "project" ? projectDetail?.project.id : undefined;
+    const scope = `${page}:${projectId ?? ""}`;
+    const params = new URLSearchParams({ query: trimmed, limit: "250" });
+    if (projectId) params.set("project_id", projectId);
+    let cancelled = false;
+    api<{ issues: Issue[] }>(`/issues?${params.toString()}`)
+      .then((result) => {
+        if (!cancelled) setServerSearchResult({ scope, query: trimmed, issues: result.issues });
+      })
+      .catch(() => {
+        if (!cancelled) setServerSearchResult({ scope, query: trimmed, issues: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [page, projectDetail?.project.id, query]);
+
   async function openProject(project: Project, nextTab: "overview" | "activity" | "issues" = "overview") {
     const detail = await api<ProjectDetail>(`/projects/${encodeURIComponent(project.id)}`);
     setProjectDetail(detail);
@@ -272,11 +294,15 @@ function App() {
     await openIssue(selectedIssue);
   }
 
-  const activeIssues = projectDetail?.issues ?? workspaceIssues;
+  const searchScope = `${page}:${page === "project" ? projectDetail?.project.id ?? "" : ""}`;
+  const trimmedQuery = query.trim();
+  const matchingServerSearch =
+    trimmedQuery && serverSearchResult?.query === trimmedQuery && serverSearchResult.scope === searchScope ? serverSearchResult.issues : null;
   const filteredIssues = useMemo(() => {
-    const lower = query.trim().toLowerCase();
+    const activeIssues = trimmedQuery ? matchingServerSearch ?? [] : projectDetail?.issues ?? workspaceIssues;
+    const lower = trimmedQuery.toLowerCase();
     return activeIssues.filter((issue) => {
-      const text = `${issue.identifier ?? ""} ${issue.title} ${issue.description ?? ""}`.toLowerCase();
+      const text = `${issue.id} ${issue.external_id ?? ""} ${issue.identifier ?? ""} ${issue.title} ${issue.description ?? ""}`.toLowerCase();
       const matchesText = !lower || text.includes(lower);
       const statusType = resolveUiStatusType(issue);
       const matchesMode =
@@ -288,7 +314,7 @@ function App() {
         (statusMode === "blockers" && issue.priority === 1 && statusType !== "completed");
       return matchesText && matchesMode;
     });
-  }, [activeIssues, query, statusMode]);
+  }, [matchingServerSearch, projectDetail?.issues, statusMode, trimmedQuery, workspaceIssues]);
 
   return (
     <main className="linear-shell">

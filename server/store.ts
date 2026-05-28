@@ -142,7 +142,7 @@ export function getProject(id: string) {
   ensureIssueIdentifiers();
   const project = db.prepare("SELECT * FROM projects WHERE id = @id OR external_id = @id").get({ id }) as Record<string, unknown> | undefined;
   if (!project) return null;
-  const issues = listIssues({ project: String(project.id), limit: 80 });
+  const issues = listIssues({ project: String(project.id), limit: 250 });
   const statusCounts = db.prepare(`
     SELECT status, ${normalizedStatusTypeSql} AS status_type, COUNT(*) AS count
     FROM issues
@@ -329,12 +329,33 @@ export function listIssues(filters: { project?: string; project_id?: string; tea
     LEFT JOIN projects p ON p.id = i.project_id
     LEFT JOIN teams t ON t.id = i.team_id
   `;
+  let orderBy = "i.updated_at DESC";
   if (query) {
-    sql += " JOIN issue_fts fts ON fts.rowid = i.rowid";
-    where.push("issue_fts MATCH @query");
+    where.push(`(
+      i.rowid IN (SELECT rowid FROM issue_fts WHERE issue_fts MATCH @query)
+      OR lower(coalesce(i.identifier, '')) LIKE @query_like ESCAPE '\\'
+      OR lower(coalesce(i.external_id, '')) LIKE @query_like ESCAPE '\\'
+      OR lower(i.id) LIKE @query_like ESCAPE '\\'
+    )`);
     params.query = ftsQuery(query);
+    params.query_exact = query;
+    params.query_like = `%${escapeLike(query.toLowerCase())}%`;
+    orderBy = `
+      CASE
+        WHEN lower(coalesce(i.identifier, '')) = lower(@query_exact)
+          OR lower(coalesce(i.external_id, '')) = lower(@query_exact)
+          OR lower(i.id) = lower(@query_exact)
+        THEN 0
+        WHEN lower(coalesce(i.identifier, '')) LIKE @query_like ESCAPE '\\'
+          OR lower(coalesce(i.external_id, '')) LIKE @query_like ESCAPE '\\'
+          OR lower(i.id) LIKE @query_like ESCAPE '\\'
+        THEN 1
+        ELSE 2
+      END,
+      i.updated_at DESC
+    `;
   }
-  sql += ` WHERE ${where.join(" AND ")} ORDER BY i.updated_at DESC LIMIT @limit OFFSET @offset`;
+  sql += ` WHERE ${where.join(" AND ")} ORDER BY ${orderBy} LIMIT @limit OFFSET @offset`;
   return db.prepare(sql).all(params).map(hydrateIssue);
 }
 
@@ -345,6 +366,10 @@ function ftsQuery(value: string) {
     .map((token) => token.replace(/"/g, '""'))
     .filter(Boolean);
   return tokens.map((token) => `"${token}"`).join(" ");
+}
+
+function escapeLike(value: string) {
+  return value.replace(/[\\%_]/g, "\\$&");
 }
 
 export function getIssue(id: string) {
