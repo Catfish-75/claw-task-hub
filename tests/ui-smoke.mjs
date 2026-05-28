@@ -182,6 +182,17 @@ async function countRowsInGroup(label) {
   }, label);
 }
 
+async function assertSelectOptionsAreDark(selectLocator, label) {
+  const styles = await selectLocator.evaluate((select) => {
+    const option = select.querySelector("option");
+    const target = option ?? select;
+    const computed = getComputedStyle(target);
+    return { color: computed.color, backgroundColor: computed.backgroundColor };
+  });
+  assert(styles.color !== "rgb(154, 154, 154)", `${label} option text is still muted gray`);
+  assert(styles.backgroundColor !== "rgb(255, 255, 255)", `${label} option background is still white`);
+}
+
 async function waitForAppShell() {
   try {
     await page.locator(".linear-shell").waitFor({ state: "visible", timeout: 30000 });
@@ -285,6 +296,8 @@ await assertNoDuplicateVisibleIssueCodes("seed project");
 const limitSelect = page.getByLabel("Issues per status");
 assert(await limitSelect.isVisible(), "Per-status issue limit selector is missing");
 assert((await limitSelect.inputValue()) === "50", "Per-status issue limit did not default to 50");
+await assertSelectOptionsAreDark(limitSelect, "Per-status limit");
+await assertSelectOptionsAreDark(page.locator(".linear-create select[name='priority']"), "Priority");
 await page.getByRole("button", { name: "Todo", exact: true }).click();
 const todoRowsAt50 = await countRowsInGroup("Todo");
 assert(todoRowsAt50 === 50, `Todo group did not show exactly 50 rows at the default per-status limit: ${todoRowsAt50}`);
