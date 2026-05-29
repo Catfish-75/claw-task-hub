@@ -148,6 +148,23 @@ CREATE TABLE IF NOT EXISTS issue_claims (
   force INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS context_bindings (
+  id TEXT PRIMARY KEY,
+  context_key TEXT NOT NULL UNIQUE,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  default_tab TEXT NOT NULL DEFAULT 'issues',
+  harness TEXT,
+  workspace_name TEXT,
+  cwd TEXT,
+  repo_remote TEXT,
+  branch TEXT,
+  thread_id TEXT,
+  metadata TEXT NOT NULL DEFAULT '{}',
+  source TEXT NOT NULL DEFAULT 'local',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS issue_fts USING fts5(
   title,
   description,
@@ -176,6 +193,8 @@ CREATE INDEX IF NOT EXISTS idx_comments_issue_created ON comments(issue_id, crea
 CREATE INDEX IF NOT EXISTS idx_agent_sessions_status_expires ON agent_sessions(status, expires_at);
 CREATE INDEX IF NOT EXISTS idx_issue_claims_issue_active ON issue_claims(issue_id, released_at, expires_at);
 CREATE INDEX IF NOT EXISTS idx_issue_claims_session ON issue_claims(session_id, released_at);
+CREATE INDEX IF NOT EXISTS idx_context_bindings_project ON context_bindings(project_id);
+CREATE INDEX IF NOT EXISTS idx_context_bindings_lookup ON context_bindings(harness, repo_remote, branch, cwd, thread_id);
 `);
 }
 
@@ -196,6 +215,32 @@ const migrations: {
     description: "Index comments by issue and creation time for agent acceptance lookups",
     up: (database) => {
       database.exec("CREATE INDEX IF NOT EXISTS idx_comments_issue_created ON comments(issue_id, created_at DESC)");
+    },
+  },
+  {
+    id: "0003_context_bindings",
+    description: "Create project context bindings for agentic harness routing",
+    up: (database) => {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS context_bindings (
+          id TEXT PRIMARY KEY,
+          context_key TEXT NOT NULL UNIQUE,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          default_tab TEXT NOT NULL DEFAULT 'issues',
+          harness TEXT,
+          workspace_name TEXT,
+          cwd TEXT,
+          repo_remote TEXT,
+          branch TEXT,
+          thread_id TEXT,
+          metadata TEXT NOT NULL DEFAULT '{}',
+          source TEXT NOT NULL DEFAULT 'local',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_context_bindings_project ON context_bindings(project_id);
+        CREATE INDEX IF NOT EXISTS idx_context_bindings_lookup ON context_bindings(harness, repo_remote, branch, cwd, thread_id);
+      `);
     },
   },
 ];

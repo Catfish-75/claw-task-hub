@@ -1,4 +1,26 @@
-import { claimIssue, dashboard, endAgentSession, getIssue, heartbeatAgentSession, listAgentSessions, listIssueClaims, listIssues, listProjects, listTeams, releaseIssueClaim, repairIssueInvariants, saveComment, startAgentSession, upsertIssue, upsertProject } from "./store.js";
+import {
+  claimIssue,
+  dashboard,
+  deleteContextBinding,
+  endAgentSession,
+  getContextBinding,
+  getIssue,
+  heartbeatAgentSession,
+  listAgentSessions,
+  listContextBindings,
+  listIssueClaims,
+  listIssues,
+  listProjects,
+  listTeams,
+  releaseIssueClaim,
+  repairIssueInvariants,
+  resolveContextProject,
+  saveComment,
+  startAgentSession,
+  upsertContextBinding,
+  upsertIssue,
+  upsertProject,
+} from "./store.js";
 
 let stdin = Buffer.alloc(0);
 
@@ -110,6 +132,61 @@ const tools = [
     limit: { type: "number" },
   }),
   tool("repair_issue_invariants", "Normalize stored issue status_type, completed_at, and labels for legacy rows."),
+  tool("save_context_binding", "Create or update a durable harness context binding to a Claw Task Hub project. Use this to bind a repo, working directory, thread, or harness context to the project that should open by default.", {
+    id: { type: "string" },
+    context_key: { type: "string" },
+    project_id: { type: "string" },
+    default_tab: { type: "string", enum: ["overview", "activity", "issues"] },
+    harness: { type: "string" },
+    workspace_name: { type: "string" },
+    cwd: { type: "string" },
+    repo_remote: { type: "string" },
+    branch: { type: "string" },
+    thread_id: { type: "string" },
+    metadata: { type: "object" },
+    source: { type: "string" },
+  }, ["context_key", "project_id"]),
+  tool("upsert_context_binding", "Alias for save_context_binding.", {
+    id: { type: "string" },
+    context_key: { type: "string" },
+    project_id: { type: "string" },
+    default_tab: { type: "string", enum: ["overview", "activity", "issues"] },
+    harness: { type: "string" },
+    workspace_name: { type: "string" },
+    cwd: { type: "string" },
+    repo_remote: { type: "string" },
+    branch: { type: "string" },
+    thread_id: { type: "string" },
+    metadata: { type: "object" },
+    source: { type: "string" },
+  }, ["context_key", "project_id"]),
+  tool("get_context_binding", "Get one harness context binding by id or context_key.", {
+    id: { type: "string" },
+    context_key: { type: "string" },
+  }),
+  tool("list_context_bindings", "List durable harness context bindings.", {
+    context_key: { type: "string" },
+    project_id: { type: "string" },
+    harness: { type: "string" },
+    cwd: { type: "string" },
+    repo_remote: { type: "string" },
+    branch: { type: "string" },
+    thread_id: { type: "string" },
+    limit: { type: "number" },
+  }),
+  tool("resolve_context_project", "Resolve the Claw Task Hub project for a harness context. Prefer exact context_key; otherwise pass thread_id, cwd, repo_remote, branch, and/or harness.", {
+    context_key: { type: "string" },
+    project_id: { type: "string" },
+    harness: { type: "string" },
+    cwd: { type: "string" },
+    repo_remote: { type: "string" },
+    branch: { type: "string" },
+    thread_id: { type: "string" },
+  }),
+  tool("delete_context_binding", "Delete a durable harness context binding by id or context_key.", {
+    id: { type: "string" },
+    context_key: { type: "string" },
+  }),
 ];
 
 async function callTool(name: string, args: Record<string, unknown>) {
@@ -129,6 +206,15 @@ async function callTool(name: string, args: Record<string, unknown>) {
   if (name === "release_issue_claim") return releaseIssueClaim(args as Parameters<typeof releaseIssueClaim>[0]);
   if (name === "list_issue_claims") return { claims: listIssueClaims(args) };
   if (name === "repair_issue_invariants") return repairIssueInvariants();
+  if (name === "save_context_binding" || name === "upsert_context_binding") return { binding: upsertContextBinding(args as { context_key: string; project_id: string }) };
+  if (name === "get_context_binding") {
+    const locator = typeof args.context_key === "string" && args.context_key ? args.context_key : args.id;
+    if (typeof locator !== "string" || !locator) throw new Error("get_context_binding requires id or context_key");
+    return { binding: getContextBinding(locator) };
+  }
+  if (name === "list_context_bindings") return { bindings: listContextBindings(args) };
+  if (name === "resolve_context_project") return resolveContextProject(args);
+  if (name === "delete_context_binding") return deleteContextBinding(args as { id?: string; context_key?: string });
   throw new Error(`Unknown tool: ${name}`);
 }
 

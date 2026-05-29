@@ -72,9 +72,38 @@ type IssueClaim = {
   expires_at: string;
 };
 
+type AppPage = "projects" | "workspace" | "project";
+type ProjectTab = "overview" | "activity" | "issues";
 type StatusMode = "all" | "active" | "paused" | "backlog" | "todo" | "blockers";
 type IssueDisplayLimit = "50" | "100" | "200" | "all";
 type IssueStatusType = "started" | "blocked" | "paused" | "backlog" | "unstarted" | "completed" | "canceled";
+
+type ContextBinding = {
+  id: string;
+  context_key: string;
+  project_id: string;
+  project_name?: string;
+  default_tab: ProjectTab;
+  url_path: string;
+};
+
+type ContextResolution = {
+  binding: ContextBinding | null;
+  project: Project | null;
+  url_path: string | null;
+};
+
+type RouteDescriptor = {
+  kind: "projects" | "workspace" | "project" | "issue" | "context";
+  projectId?: string;
+  issueId?: string;
+  contextKey?: string;
+  tab: ProjectTab;
+  tabExplicit?: boolean;
+  statusMode: StatusMode;
+  query: string;
+  issueDisplayLimit: IssueDisplayLimit;
+};
 
 type ApiIssueGroup = {
   key: string;
@@ -140,6 +169,10 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function fetchProjectDetail(projectId: string, issueLimit: IssueDisplayLimit): Promise<ProjectDetail> {
+  return api<ProjectDetail>(`/projects/${encodeURIComponent(projectId)}?issues_per_status=${encodeURIComponent(issueLimit)}`);
+}
+
 function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [workspaceIssues, setWorkspaceIssues] = useState<Issue[]>([]);
@@ -147,18 +180,20 @@ function App() {
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [serverSearchResult, setServerSearchResult] = useState<{ scope: string; query: string; issues: Issue[] } | null>(null);
-  const [page, setPage] = useState<"projects" | "workspace" | "project">("projects");
-  const [tab, setTab] = useState<"overview" | "activity" | "issues">("overview");
+  const [page, setPage] = useState<AppPage>("projects");
+  const [tab, setTab] = useState<ProjectTab>("overview");
   const [query, setQuery] = useState("");
   const [statusMode, setStatusMode] = useState<StatusMode>("all");
   const [issueDisplayLimit, setIssueDisplayLimit] = useState<IssueDisplayLimit>(defaultIssueDisplayLimit);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const pageRef = useRef<"projects" | "workspace" | "project">("projects");
+  const pageRef = useRef<AppPage>("projects");
   const issueDisplayLimitRef = useRef<IssueDisplayLimit>(defaultIssueDisplayLimit);
   const projectDetailRef = useRef<ProjectDetail | null>(null);
   const selectedIssueRef = useRef<Issue | null>(null);
+  const routeApplyingRef = useRef(false);
+  const [routingReady, setRoutingReady] = useState(false);
   const refreshInFlightRef = useRef(false);
   const lastRefreshStartedAtRef = useRef(0);
   const refreshTimerRef = useRef<number | null>(null);
@@ -178,6 +213,100 @@ function App() {
   useEffect(() => {
     issueDisplayLimitRef.current = issueDisplayLimit;
   }, [issueDisplayLimit]);
+
+  const applyRouteFromLocation = useCallback(async () => {
+    const route = parseRoute(window.location);
+    routeApplyingRef.current = true;
+    issueDisplayLimitRef.current = route.issueDisplayLimit;
+    setIssueDisplayLimit(route.issueDisplayLimit);
+    setQuery(route.query);
+    setStatusMode(route.statusMode);
+    setCreateError(null);
+    try {
+      if (route.kind === "project" && route.projectId) {
+        const detail = await fetchProjectDetail(route.projectId, route.issueDisplayLimit);
+        setProjectDetail(detail);
+        setSelectedIssue(detail.issues[0] ?? null);
+        setPage("project");
+        setTab(route.tab);
+        return;
+      }
+      if (route.kind === "issue" && route.issueId) {
+        const issue = await api<{ issue: Issue }>(`/issues/${encodeURIComponent(route.issueId)}`);
+        if (issue.issue.project_id) {
+          const detail = await fetchProjectDetail(issue.issue.project_id, route.issueDisplayLimit);
+          setProjectDetail(detail);
+          setSelectedIssue(issue.issue);
+          setPage("project");
+          setTab("issues");
+        } else {
+          setProjectDetail(null);
+          setSelectedIssue(issue.issue);
+          setPage("workspace");
+          setTab("issues");
+        }
+        return;
+      }
+      if (route.kind === "context" && route.contextKey) {
+        const resolution = await api<ContextResolution>(`/context-bindings/resolve?context_key=${encodeURIComponent(route.contextKey)}`);
+        if (resolution.project?.id) {
+          const detail = await fetchProjectDetail(resolution.project.id, route.issueDisplayLimit);
+          setProjectDetail(detail);
+          setSelectedIssue(detail.issues[0] ?? null);
+          setPage("project");
+          setTab(route.tabExplicit ? route.tab : parseProjectTab(resolution.binding?.default_tab) ?? "issues");
+          return;
+        }
+      }
+      if (route.kind === "workspace") {
+        setProjectDetail(null);
+        setSelectedIssue(null);
+        setPage("workspace");
+        setTab("issues");
+        return;
+      }
+      setProjectDetail(null);
+      setSelectedIssue(null);
+      setPage("projects");
+      setTab("overview");
+    } catch (error) {
+      setProjectDetail(null);
+      setSelectedIssue(null);
+      setPage("projects");
+      setTab("overview");
+      setCreateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      routeApplyingRef.current = false;
+      setRoutingReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const initialRouteTimer = window.setTimeout(() => {
+      void applyRouteFromLocation();
+    }, 0);
+    const onPopState = () => {
+      void applyRouteFromLocation();
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.clearTimeout(initialRouteTimer);
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [applyRouteFromLocation]);
+
+  useEffect(() => {
+    if (!routingReady || routeApplyingRef.current) return;
+    const path = currentRoutePath({
+      page,
+      projectId: projectDetail?.project.id,
+      tab,
+      query,
+      statusMode,
+      issueDisplayLimit,
+    });
+    replaceBrowserPath(path);
+  }, [issueDisplayLimit, page, projectDetail?.project.id, query, routingReady, statusMode, tab]);
 
   const refresh = useCallback(async (force = false) => {
     if (refreshInFlightRef.current) return;
@@ -262,8 +391,8 @@ function App() {
     };
   }, [page, projectDetail?.project.id, query]);
 
-  async function openProject(project: Project, nextTab: "overview" | "activity" | "issues" = "overview") {
-    const detail = await api<ProjectDetail>(`/projects/${encodeURIComponent(project.id)}?issues_per_status=${encodeURIComponent(issueDisplayLimitRef.current)}`);
+  async function openProject(project: Project, nextTab: ProjectTab = "overview") {
+    const detail = await fetchProjectDetail(project.id, issueDisplayLimitRef.current);
     setProjectDetail(detail);
     setSelectedIssue(detail.issues[0] ?? null);
     setPage("project");
@@ -271,6 +400,33 @@ function App() {
     setQuery("");
     setStatusMode("all");
     setCreateError(null);
+    pushBrowserPath(projectRoutePath(project.id, nextTab));
+  }
+
+  function openProjectsPage() {
+    setPage("projects");
+    setProjectDetail(null);
+    setSelectedIssue(null);
+    setCreateError(null);
+    pushBrowserPath("/projects");
+  }
+
+  function openWorkspacePage() {
+    setPage("workspace");
+    setProjectDetail(null);
+    setSelectedIssue(workspaceIssues[0] ?? null);
+    setTab("issues");
+    setQuery("");
+    setStatusMode("all");
+    setCreateError(null);
+    pushBrowserPath(workspaceRoutePath({ query: "", statusMode: "all", issueDisplayLimit }));
+  }
+
+  function changeTab(nextTab: ProjectTab) {
+    setTab(nextTab);
+    if (projectDetailRef.current?.project.id) {
+      pushBrowserPath(projectRoutePath(projectDetailRef.current.project.id, nextTab, { query, statusMode, issueDisplayLimit }));
+    }
   }
 
   function changeIssueDisplayLimit(value: IssueDisplayLimit) {
@@ -282,7 +438,10 @@ function App() {
   async function openIssue(issue: Issue, reveal = false) {
     const detail = await api<{ issue: Issue }>(`/issues/${encodeURIComponent(issue.id)}`);
     setSelectedIssue(detail.issue);
-    if (reveal) setDetailOpen(true);
+    if (reveal) {
+      pushBrowserPath(issueRoutePath(detail.issue));
+      setDetailOpen(true);
+    }
   }
 
   async function createIssue(event: FormEvent<HTMLFormElement>) {
@@ -313,7 +472,7 @@ function App() {
       form.reset();
       await refresh();
       await openIssue(created.issue);
-      setTab("issues");
+      changeTab("issues");
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -374,20 +533,9 @@ function App() {
           page={page}
           tab={tab}
           project={projectDetail?.project}
-          onProjects={() => {
-            setPage("projects");
-            setProjectDetail(null);
-            setSelectedIssue(null);
-            setCreateError(null);
-          }}
-          onWorkspace={() => {
-            setPage("workspace");
-            setProjectDetail(null);
-            setSelectedIssue(workspaceIssues[0] ?? null);
-            setTab("issues");
-            setCreateError(null);
-          }}
-          onTab={setTab}
+          onProjects={openProjectsPage}
+          onWorkspace={openWorkspacePage}
+          onTab={changeTab}
         />
 
         {page === "projects" ? (
@@ -412,7 +560,7 @@ function App() {
             onAddComment={addComment}
           />
         ) : tab === "overview" && projectDetail ? (
-          <ProjectOverview detail={projectDetail} onTab={setTab} />
+          <ProjectOverview detail={projectDetail} onTab={changeTab} />
         ) : tab === "activity" && projectDetail ? (
           <ProjectActivity detail={projectDetail} />
         ) : projectDetail ? (
@@ -467,12 +615,12 @@ function HeaderBar({
   onWorkspace,
   onTab,
 }: {
-  page: "projects" | "workspace" | "project";
-  tab: "overview" | "activity" | "issues";
+  page: AppPage;
+  tab: ProjectTab;
   project?: Project;
   onProjects: () => void;
   onWorkspace: () => void;
-  onTab: (tab: "overview" | "activity" | "issues") => void;
+  onTab: (tab: ProjectTab) => void;
 }) {
   const showProjectTabs = page === "project";
   return (
@@ -554,7 +702,7 @@ function ProjectsPage({ projects, onOpenProject }: { projects: Project[]; onOpen
   );
 }
 
-function ProjectOverview({ detail, onTab }: { detail: ProjectDetail; onTab: (tab: "overview" | "activity" | "issues") => void }) {
+function ProjectOverview({ detail, onTab }: { detail: ProjectDetail; onTab: (tab: ProjectTab) => void }) {
   const project = detail.project;
   const topResources = detail.issues.slice(0, 16);
   return (
@@ -771,6 +919,110 @@ function IssueDialog({ issue, onClose, onAddComment }: { issue: Issue; onClose: 
       </section>
     </div>
   );
+}
+
+function parseRoute(location: Location): RouteDescriptor {
+  const params = new URLSearchParams(location.search);
+  const query = params.get("q") ?? params.get("query") ?? "";
+  const issueDisplayLimit = parseIssueDisplayLimitParam(params.get("limit") ?? params.get("issues_per_status"));
+  const statusMode = parseStatusModeParam(params.get("status"));
+  const queryTab = parseProjectTab(params.get("tab"));
+  const contextKey = params.get("context_key");
+  const projectId = params.get("project_id");
+  const issueId = params.get("issue");
+  if (contextKey) {
+    return { kind: "context", contextKey, tab: queryTab ?? "issues", tabExplicit: Boolean(queryTab), statusMode, query, issueDisplayLimit };
+  }
+  if (issueId) {
+    return { kind: "issue", issueId, tab: "issues", statusMode, query, issueDisplayLimit };
+  }
+  if (projectId) {
+    return { kind: "project", projectId, tab: queryTab ?? "issues", statusMode, query, issueDisplayLimit };
+  }
+  const segments = location.pathname.split("/").map((part) => part.trim()).filter(Boolean).map(decodeUrlSegment);
+  if (!segments.length) return { kind: "projects", tab: "overview", statusMode, query, issueDisplayLimit };
+  if (segments[0] === "workspace") return { kind: "workspace", tab: "issues", statusMode, query, issueDisplayLimit };
+  if (segments[0] === "issues" && segments[1]) {
+    return { kind: "issue", issueId: segments[1], tab: "issues", statusMode, query, issueDisplayLimit };
+  }
+  if (segments[0] === "contexts" && segments[1]) {
+    const pathTab = parseProjectTab(segments[2]);
+    return { kind: "context", contextKey: segments[1], tab: pathTab ?? queryTab ?? "issues", tabExplicit: Boolean(pathTab || queryTab), statusMode, query, issueDisplayLimit };
+  }
+  if (segments[0] === "projects" && segments[1]) {
+    return { kind: "project", projectId: segments[1], tab: parseProjectTab(segments[2]) ?? queryTab ?? "overview", statusMode, query, issueDisplayLimit };
+  }
+  return { kind: "projects", tab: "overview", statusMode, query, issueDisplayLimit };
+}
+
+function currentRoutePath(input: {
+  page: AppPage;
+  projectId?: string;
+  tab: ProjectTab;
+  query: string;
+  statusMode: StatusMode;
+  issueDisplayLimit: IssueDisplayLimit;
+}) {
+  if (input.page === "project" && input.projectId) {
+    return projectRoutePath(input.projectId, input.tab, input);
+  }
+  if (input.page === "workspace") return workspaceRoutePath(input);
+  return "/projects";
+}
+
+function projectRoutePath(projectId: string, tab: ProjectTab = "overview", options: Partial<Pick<RouteDescriptor, "query" | "statusMode" | "issueDisplayLimit">> = {}) {
+  return `/projects/${encodeURIComponent(projectId)}/${tab}${routeQuery(options)}`;
+}
+
+function workspaceRoutePath(options: Partial<Pick<RouteDescriptor, "query" | "statusMode" | "issueDisplayLimit">> = {}) {
+  return `/workspace/issues${routeQuery(options)}`;
+}
+
+function issueRoutePath(issue: Issue) {
+  return `/issues/${encodeURIComponent(issueCode(issue))}`;
+}
+
+function routeQuery(options: Partial<Pick<RouteDescriptor, "query" | "statusMode" | "issueDisplayLimit">>) {
+  const params = new URLSearchParams();
+  const query = options.query?.trim();
+  if (query) params.set("q", query);
+  if (options.statusMode && options.statusMode !== "all") params.set("status", options.statusMode);
+  if (options.issueDisplayLimit && options.issueDisplayLimit !== defaultIssueDisplayLimit) params.set("limit", options.issueDisplayLimit);
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function pushBrowserPath(path: string) {
+  const current = `${window.location.pathname}${window.location.search}`;
+  if (current !== path) window.history.pushState({}, "", path);
+}
+
+function replaceBrowserPath(path: string) {
+  const current = `${window.location.pathname}${window.location.search}`;
+  if (current !== path) window.history.replaceState({}, "", path);
+}
+
+function parseProjectTab(value: string | null | undefined): ProjectTab | null {
+  if (value === "overview" || value === "activity" || value === "issues") return value;
+  return null;
+}
+
+function parseStatusModeParam(value: string | null | undefined): StatusMode {
+  if (value === "active" || value === "paused" || value === "backlog" || value === "todo" || value === "blockers") return value;
+  return "all";
+}
+
+function parseIssueDisplayLimitParam(value: string | null | undefined): IssueDisplayLimit {
+  if (value === "100" || value === "200" || value === "all") return value;
+  return "50";
+}
+
+function decodeUrlSegment(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function AgentStateInline({ issue }: { issue: Issue }) {

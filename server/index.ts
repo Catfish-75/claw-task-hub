@@ -4,16 +4,21 @@ import { z } from "zod";
 import { dbPath } from "./db.js";
 import {
   dashboard,
+  deleteContextBinding,
   ensureDefaultTeam,
+  getContextBinding,
   getIssue,
   getProject,
+  listContextBindings,
   listIssueGroups,
   listIssues,
   listProjects,
   listTeams,
   parseIssueDisplayLimit,
   recentSyncRuns,
+  resolveContextProject,
   saveComment,
+  upsertContextBinding,
   upsertIssue,
   upsertProject,
 } from "./store.js";
@@ -68,6 +73,59 @@ app.get("/api/dashboard", (_req, res) => res.json(dashboard()));
 app.get("/api/sync-runs", (_req, res) => res.json({ runs: recentSyncRuns() }));
 app.get("/api/teams", (_req, res) => res.json({ teams: listTeams() }));
 app.get("/api/projects", (_req, res) => res.json({ projects: listProjects() }));
+app.get("/api/context-bindings", (req, res) => {
+  res.json({
+    bindings: listContextBindings({
+      context_key: req.query.context_key as string | undefined,
+      project_id: req.query.project_id as string | undefined,
+      harness: req.query.harness as string | undefined,
+      cwd: req.query.cwd as string | undefined,
+      repo_remote: req.query.repo_remote as string | undefined,
+      branch: req.query.branch as string | undefined,
+      thread_id: req.query.thread_id as string | undefined,
+      limit: req.query.limit as string | undefined,
+    }),
+  });
+});
+app.get("/api/context-bindings/resolve", (req, res) => {
+  res.json(resolveContextProject({
+    context_key: req.query.context_key as string | undefined,
+    project_id: req.query.project_id as string | undefined,
+    harness: req.query.harness as string | undefined,
+    cwd: req.query.cwd as string | undefined,
+    repo_remote: req.query.repo_remote as string | undefined,
+    branch: req.query.branch as string | undefined,
+    thread_id: req.query.thread_id as string | undefined,
+  }));
+});
+app.get("/api/context-bindings/:id", (req, res) => {
+  const binding = getContextBinding(req.params.id);
+  if (!binding) return res.status(404).json({ error: "Context binding not found" });
+  res.json({ binding });
+});
+app.post("/api/context-bindings", (req, res) => {
+  const schema = z.object({
+    id: z.string().optional(),
+    context_key: z.string().min(1),
+    project_id: z.string().min(1),
+    default_tab: z.enum(["overview", "activity", "issues"]).optional(),
+    harness: z.string().nullable().optional(),
+    workspace_name: z.string().nullable().optional(),
+    cwd: z.string().nullable().optional(),
+    repo_remote: z.string().nullable().optional(),
+    branch: z.string().nullable().optional(),
+    thread_id: z.string().nullable().optional(),
+    metadata: z.unknown().optional(),
+    source: z.string().optional(),
+  });
+  try {
+    res.json({ binding: upsertContextBinding(schema.parse(req.body)) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(400).json({ error: message });
+  }
+});
+app.delete("/api/context-bindings/:id", (req, res) => res.json(deleteContextBinding({ id: req.params.id })));
 app.get("/api/projects/:id", (req, res) => {
   const project = getProject(req.params.id, { issues_per_status: req.query.issues_per_status });
   if (!project) return res.status(404).json({ error: "Project not found" });

@@ -17,19 +17,24 @@ process.env.CLAW_TASK_HUB_DB = join(tempDir, "test.sqlite");
 try {
   const {
     claimIssue,
+    deleteContextBinding,
     endAgentSession,
     ensureDefaultTeam,
+    getContextBinding,
     getIssue,
     getProject,
     heartbeatAgentSession,
     listAgentSessions,
+    listContextBindings,
     listIssueClaims,
     listIssueGroups,
     listIssues,
     releaseIssueClaim,
     repairIssueInvariants,
+    resolveContextProject,
     saveComment,
     startAgentSession,
+    upsertContextBinding,
     upsertIssue,
     upsertProject,
     upsertTeam,
@@ -53,7 +58,9 @@ try {
   const appliedMigrations = db.prepare("SELECT id FROM schema_migrations ORDER BY id").all().map((row) => row.id);
   assert(appliedMigrations.includes("0001_baseline_schema"), "default DB did not record the baseline schema migration");
   assert(appliedMigrations.includes("0002_comments_issue_created_index"), "default DB did not record the comments index migration");
+  assert(appliedMigrations.includes("0003_context_bindings"), "default DB did not record the context bindings migration");
   assert(indexExists(db, "idx_comments_issue_created"), "default DB did not create the comments issue/date index");
+  assert(indexExists(db, "idx_context_bindings_lookup"), "default DB did not create the context binding lookup index");
   assert(runMigrations().applied.length === 0, "default DB migrations are not idempotent");
 
   const freshMigrationDb = new Database(join(tempDir, "fresh-migration.sqlite"));
@@ -61,8 +68,10 @@ try {
     const freshMigration = initializeDatabase(freshMigrationDb);
     assert(freshMigration.applied.includes("0001_baseline_schema"), "fresh DB did not apply the baseline migration");
     assert(freshMigration.applied.includes("0002_comments_issue_created_index"), "fresh DB did not apply the comments index migration");
-    assert(freshMigrationDb.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count === 2, "fresh DB stored the wrong migration count");
+    assert(freshMigration.applied.includes("0003_context_bindings"), "fresh DB did not apply the context bindings migration");
+    assert(freshMigrationDb.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count === 3, "fresh DB stored the wrong migration count");
     assert(indexExists(freshMigrationDb, "idx_comments_issue_created"), "fresh DB did not create the comments issue/date index");
+    assert(indexExists(freshMigrationDb, "idx_context_bindings_lookup"), "fresh DB did not create the context binding lookup index");
     assert(runMigrations(freshMigrationDb).applied.length === 0, "fresh DB migration rerun was not a no-op");
   } finally {
     freshMigrationDb.close();
@@ -81,10 +90,12 @@ try {
     `);
     const legacyMigration = initializeDatabase(legacyMigrationDb);
     assert(legacyMigration.applied.includes("0002_comments_issue_created_index"), "legacy migration table did not accept the comments index migration");
+    assert(legacyMigration.applied.includes("0003_context_bindings"), "legacy migration table did not accept the context bindings migration");
     const legacyRows = legacyMigrationDb.prepare("SELECT id, name, description FROM schema_migrations ORDER BY id").all();
-    assert(legacyRows.length === 2, `legacy migration table stored wrong row count: ${legacyRows.length}`);
+    assert(legacyRows.length === 3, `legacy migration table stored wrong row count: ${legacyRows.length}`);
     assert(legacyRows.every((row) => row.name && row.description), "legacy migration table has incomplete name/description values");
     assert(indexExists(legacyMigrationDb, "idx_comments_issue_created"), "legacy DB did not create the comments issue/date index");
+    assert(indexExists(legacyMigrationDb, "idx_context_bindings_lookup"), "legacy DB did not create the context binding lookup index");
   } finally {
     legacyMigrationDb.close();
   }
@@ -95,7 +106,9 @@ try {
     const existingMigration = initializeDatabase(existingMigrationDb);
     assert(existingMigration.applied.includes("0001_baseline_schema"), "existing DB did not record the baseline migration");
     assert(existingMigration.applied.includes("0002_comments_issue_created_index"), "existing DB did not apply the comments index migration");
+    assert(existingMigration.applied.includes("0003_context_bindings"), "existing DB did not apply the context bindings migration");
     assert(indexExists(existingMigrationDb, "idx_comments_issue_created"), "existing DB did not create the comments issue/date index");
+    assert(indexExists(existingMigrationDb, "idx_context_bindings_lookup"), "existing DB did not create the context binding lookup index");
     const marker = existingMigrationDb.prepare("SELECT id FROM preserved_marker").get();
     assert(marker.id === "keep-me", "existing DB initialization did not preserve pre-existing data");
     assert(runMigrations(existingMigrationDb).applied.length === 0, "existing DB migration rerun was not a no-op");
@@ -116,6 +129,7 @@ try {
     const ftsRepairMigration = runMigrations(existingMigrationDb);
     assert(ftsRepairMigration.applied.includes("0001_baseline_schema"), "baseline migration did not rerun on a pre-metadata DB");
     assert(ftsRepairMigration.applied.includes("0002_comments_issue_created_index"), "comments index migration did not rerun on a pre-metadata DB");
+    assert(ftsRepairMigration.applied.includes("0003_context_bindings"), "context bindings migration did not rerun on a pre-metadata DB");
     assert(existingMigrationDb.prepare("SELECT COUNT(*) AS count FROM issues WHERE id = 'premigration_fts_issue'").get().count === 1, "baseline migration did not preserve an existing issue");
     assert(existingMigrationDb.prepare("SELECT COUNT(*) AS count FROM comments WHERE id = 'premigration_comment'").get().count === 1, "baseline migration did not preserve an existing comment");
     assert(existingMigrationDb.prepare("SELECT COUNT(*) AS count FROM issue_fts WHERE issue_fts MATCH 'Premigration'").get().count === 1, "baseline migration did not rebuild FTS for pre-existing issues");
@@ -128,6 +142,51 @@ try {
     external_id: "store-regression-project",
     name: "Store Regression Project",
   });
+  const contextBinding = upsertContextBinding({
+    context_key: "codex:C:/work/claw-task-hub",
+    project_id: storeProject.id,
+    default_tab: "issues",
+    harness: "codex",
+    workspace_name: "CodexTaskHub",
+    cwd: "C:/work/claw-task-hub",
+    repo_remote: "https://user:secret@example.com/Catfish-75/claw-task-hub.git",
+    branch: "main",
+    thread_id: "thread-store-regression",
+    metadata: { reason: "store regression" },
+  });
+  assert(contextBinding.context_key === "codex:C:/work/claw-task-hub", "context binding did not preserve the context key");
+  assert(contextBinding.project_id === storeProject.id, "context binding did not resolve to the expected project");
+  assert(contextBinding.default_tab === "issues", "context binding did not preserve the default tab");
+  assert(contextBinding.url_path === `/projects/${encodeURIComponent(storeProject.id)}/issues`, `context binding URL path is wrong: ${contextBinding.url_path}`);
+  assert(contextBinding.repo_remote === "https://example.com/Catfish-75/claw-task-hub.git", `context binding did not strip remote credentials: ${contextBinding.repo_remote}`);
+  assert(contextBinding.metadata.reason === "store regression", "context binding metadata did not round-trip");
+  assert(getContextBinding(contextBinding.id)?.context_key === contextBinding.context_key, "getContextBinding(id) did not find the binding");
+  assert(getContextBinding(contextBinding.context_key)?.id === contextBinding.id, "getContextBinding(context_key) did not find the binding");
+  assert(listContextBindings({ harness: "codex" }).some((binding) => binding.id === contextBinding.id), "listContextBindings(harness) did not return the binding");
+  assert(resolveContextProject({ context_key: contextBinding.context_key }).project?.id === storeProject.id, "resolveContextProject(context_key) did not find the project");
+  assert(resolveContextProject({ thread_id: "thread-store-regression" }).binding?.id === contextBinding.id, "resolveContextProject(thread_id) did not find the binding");
+  assert(resolveContextProject({ cwd: "C:/work/claw-task-hub" }).binding?.id === contextBinding.id, "resolveContextProject(cwd) did not find the binding");
+  assert(resolveContextProject({ repo_remote: "https://other:credential@example.com/Catfish-75/claw-task-hub.git", branch: "main" }).binding?.id === contextBinding.id, "resolveContextProject(repo_remote+branch) did not find the binding");
+  const updatedContextBinding = upsertContextBinding({
+    context_key: contextBinding.context_key,
+    project_id: storeProject.id,
+    default_tab: "activity",
+  });
+  assert(updatedContextBinding.id === contextBinding.id, "upsertContextBinding(context_key) created a duplicate binding");
+  assert(updatedContextBinding.default_tab === "activity", "upsertContextBinding(context_key) did not update the default tab");
+  const deletedContextBinding = deleteContextBinding({ context_key: contextBinding.context_key });
+  assert(deletedContextBinding.deleted === true, "deleteContextBinding(context_key) did not delete the binding");
+  assert(getContextBinding(contextBinding.context_key) === null, "deleted context binding still resolves");
+  let missingContextProjectMessage = "";
+  try {
+    upsertContextBinding({
+      context_key: "codex:missing-project",
+      project_id: "missing-project",
+    });
+  } catch (error) {
+    missingContextProjectMessage = error instanceof Error ? error.message : String(error);
+  }
+  assert(missingContextProjectMessage === "Project not found: missing-project", `context binding missing project error was not clear: ${missingContextProjectMessage}`);
 
   const rowCountBeforeMissingProject = db.prepare("SELECT COUNT(*) AS count FROM issues").get().count;
   let missingProjectMessage = "";

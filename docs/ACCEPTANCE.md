@@ -15,6 +15,8 @@ The system should be useful to MCP-compatible clients, CLIs, and agent-driven de
 - Replayed or mirrored writes are idempotent: external IDs update rows instead of creating duplicates.
 - Local REST API supports health, dashboard, teams, projects, issue list, issue detail, issue create, and comments.
 - Local tool CLI exposes stable issue-tracker names: `list_projects`, `save_project`, `list_issues`, `get_issue`, `save_issue`, `save_comment`, `list_teams`.
+- Harness context bindings map a repository, working directory, thread, or context key to the correct project.
+- UI deep links open project overview, activity, issues, individual issues, workspace issues, and context-bound project pages after refresh.
 - UI supports project filtering, status filtering, indexed search, list/detail flow, quick local issue creation, and comments.
 - Cloud/MCP outage leaves local read/write flows usable and visible as degraded mode.
 - Historical sync metadata can record status, stats, cursor, and error text without making any cloud service a runtime dependency.

@@ -70,10 +70,62 @@ Agents must:
 Agents must not:
 
 - Store passwords, OAuth tokens, private keys, cookies, or raw secret values in issues or comments.
+- Store passwords, OAuth tokens, private keys, cookies, or raw secret values in context binding metadata.
 - Reconnect to an external tracker as an active fallback for Claw Task Hub work.
 - Invent long code-like issue titles such as `LOCAL_SAV_...` when a short identifier already exists.
 - Mark work `Done` without verification or an explicit owner decision.
 - Reassign or close another active agent's issue without reading the current comments and status.
+
+## Project Context Binding
+
+Harnesses should bind their local execution context to a Claw Task Hub project once, then resolve that binding on every new or resumed session. This prevents agents from filing work into the wrong project and lets the UI open directly to the correct project after a browser refresh.
+
+A context binding can include:
+
+- `context_key`: a stable harness-defined key, for example `codex:C:/work/my-repo` or `claude-code:repo:example/my-repo`.
+- `project_id`: the owning Claw Task Hub project id from `list_projects`.
+- `default_tab`: `overview`, `activity`, or `issues`; use `issues` for most agent work.
+- `harness`: the agentic harness name.
+- `cwd`: current working directory.
+- `repo_remote`: repository remote URL; URL credentials are stripped before storage.
+- `branch`: branch name.
+- `thread_id`: optional harness thread/session id.
+- `metadata`: non-secret structured hints for the harness.
+
+Create or update a binding:
+
+```powershell
+$json = '{"context_key":"codex:C:/work/my-repo","project_id":"project_my_repo","default_tab":"issues","harness":"codex","cwd":"C:/work/my-repo","repo_remote":"https://github.com/example/my-repo.git","branch":"main"}'
+$b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+npm run hub -- tools/call save_context_binding "base64:$b64"
+```
+
+Resolve by exact key:
+
+```powershell
+$json = '{"context_key":"codex:C:/work/my-repo"}'
+$b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+npm run hub -- tools/call resolve_context_project "base64:$b64"
+```
+
+Resolve by repository or working directory when the exact key is unavailable:
+
+```powershell
+$json = '{"harness":"codex","cwd":"C:/work/my-repo","repo_remote":"https://github.com/example/my-repo.git","branch":"main"}'
+$b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+npm run hub -- tools/call resolve_context_project "base64:$b64"
+```
+
+Resolution order is deterministic: exact `context_key`, then `thread_id`, `cwd`, `repo_remote + branch`, `repo_remote`, and finally harness-scoped fallbacks. A resolved binding returns `project`, `binding`, and `url_path`.
+
+UI deep links:
+
+- `/projects/<project-id>/overview`
+- `/projects/<project-id>/activity`
+- `/projects/<project-id>/issues`
+- `/issues/<issue-id-or-identifier>`
+- `/contexts/<context-key>/issues`
+- `/workspace/issues`
 
 ## CLI Fallback
 
@@ -157,6 +209,12 @@ Canonical tool names:
 - `release_issue_claim`
 - `list_issue_claims`
 - `repair_issue_invariants`
+- `save_context_binding`
+- `upsert_context_binding`
+- `get_context_binding`
+- `list_context_bindings`
+- `resolve_context_project`
+- `delete_context_binding`
 
 Optional history import from Linear is an operator-only tool under `tools/linear-migration`. It is not part of the normal API, MCP server, or hub CLI, and it still requires `CLAW_TASK_HUB_ALLOW_LINEAR_IMPORT=1` for an explicit one-off import run. Harnesses must not call it during normal Claw Task Hub work.
 

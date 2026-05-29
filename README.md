@@ -114,6 +114,11 @@ The CLI and MCP tool names are intentionally stable and harness-friendly:
 - `release_issue_claim`
 - `list_issue_claims`
 - `repair_issue_invariants`
+- `save_context_binding`
+- `get_context_binding`
+- `list_context_bindings`
+- `resolve_context_project`
+- `delete_context_binding`
 
 For active work discovery, call `list_issues` with `include_done:false` so completed records are excluded using normalized status semantics.
 
@@ -122,6 +127,37 @@ The MCP server can be started with:
 ```powershell
 npm run mcp
 ```
+
+## Project-Bound Links
+
+Claw Task Hub supports durable project bindings for agentic harnesses. A binding maps a local context, such as a repository, working directory, thread id, or harness-specific key, to the project that should open by default.
+
+Create a binding:
+
+```powershell
+$json = '{"context_key":"codex:demo-agent-project","project_id":"demo-agent-project","default_tab":"issues","harness":"codex","cwd":"C:/work/demo-agent-project","repo_remote":"https://github.com/example/demo-agent-project.git","branch":"main"}'
+$b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+npm run hub -- tools/call save_context_binding "base64:$b64"
+```
+
+Resolve it later:
+
+```powershell
+$json = '{"context_key":"codex:demo-agent-project"}'
+$b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+npm run hub -- tools/call resolve_context_project "base64:$b64"
+```
+
+The UI accepts stable deep links:
+
+- `/projects/<project-id>/overview`
+- `/projects/<project-id>/activity`
+- `/projects/<project-id>/issues`
+- `/issues/<issue-id-or-identifier>`
+- `/contexts/<context-key>/issues`
+- `/workspace/issues`
+
+Context bindings are local metadata. They must not contain passwords, tokens, cookies, or private keys. Repository remotes are normalized to remove URL credentials before storage.
 
 ## Local Data
 

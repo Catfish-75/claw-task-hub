@@ -254,9 +254,35 @@ runHub("save_comment", {
   author: "UI Smoke",
   source: "local",
 });
+runHub("save_context_binding", {
+  context_key: "ui-smoke:project",
+  project_id: "project_claw_task_hub_mvp",
+  default_tab: "issues",
+  harness: "playwright",
+  cwd: "C:/work/claw-task-hub",
+  repo_remote: "https://example.com/Catfish-75/claw-task-hub.git",
+  branch: "main",
+  metadata: { smoke: true },
+});
 
 await ensureProcess(`http://127.0.0.1:${apiPort}/api/health`, ["run", "-s", "api"], { PORT: String(apiPort) });
 await ensureProcess(`http://127.0.0.1:${webPort}/`, ["run", "-s", "dev:web", "--", "--host", "127.0.0.1", "--port", String(webPort), "--strictPort"]);
+
+await page.goto(`http://127.0.0.1:${webPort}/projects/project_claw_task_hub_mvp/issues`, { waitUntil: "domcontentloaded" });
+await waitForAppShell();
+await page.getByRole("button", { name: "Issues", exact: true }).waitFor({ state: "visible", timeout: 15000 });
+assert((await page.getByRole("button", { name: "Issues", exact: true }).getAttribute("class"))?.includes("active"), "Direct project issues URL did not activate the Issues tab");
+assert(await page.locator(".searchbar input").getAttribute("placeholder") === "Search Claw Task Hub MVP", "Direct project issues URL did not load the project issue view");
+
+await page.goto(`http://127.0.0.1:${webPort}/contexts/${encodeURIComponent("ui-smoke:project")}/activity`, { waitUntil: "domcontentloaded" });
+await waitForAppShell();
+await page.getByText("Write a project update...").waitFor({ state: "visible", timeout: 15000 });
+assert((await page.getByRole("button", { name: "Activity", exact: true }).getAttribute("class"))?.includes("active"), "Context URL did not activate the requested Activity tab");
+
+await page.goto(`http://127.0.0.1:${webPort}/issues/LOCAL-3`, { waitUntil: "domcontentloaded" });
+await waitForAppShell();
+await page.locator(".issue-detail .detail-top", { hasText: "LOCAL-3" }).waitFor({ state: "visible", timeout: 15000 });
+assert(await page.locator(".issue-detail h2", { hasText: "Verify paused issue status" }).isVisible(), "Direct issue URL did not select the requested issue");
 
 await page.goto(`http://127.0.0.1:${webPort}/`, { waitUntil: "domcontentloaded" });
 await waitForAppShell();

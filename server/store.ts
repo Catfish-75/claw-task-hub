@@ -100,6 +100,32 @@ type ReleaseIssueClaimInput = {
   status?: "released" | "completed";
   force?: boolean | string | number | null;
 };
+type ContextBindingInput = {
+  id?: string;
+  context_key: string;
+  project_id: string;
+  default_tab?: string | null;
+  harness?: string | null;
+  workspace_name?: string | null;
+  cwd?: string | null;
+  repo_remote?: string | null;
+  branch?: string | null;
+  thread_id?: string | null;
+  metadata?: unknown;
+  source?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+type ContextBindingFilters = {
+  context_key?: string | null;
+  project_id?: string | null;
+  harness?: string | null;
+  cwd?: string | null;
+  repo_remote?: string | null;
+  branch?: string | null;
+  thread_id?: string | null;
+  limit?: number | string | null;
+};
 type HydratedIssueClaim = Record<string, unknown> & {
   id: string;
   issue_id: string;
@@ -274,6 +300,176 @@ export function upsertProject(input: {
       priority=excluded.priority, lead=excluded.lead, archived_at=excluded.archived_at, updated_at=excluded.updated_at
   `).run(row);
   return db.prepare("SELECT * FROM projects WHERE external_id IS @external_id OR id = @id").get(row);
+}
+
+export function upsertContextBinding(input: ContextBindingInput) {
+  const contextKey = normalizedRequiredString(input.context_key, "context_key");
+  const projectId = resolveProjectId(input.project_id);
+  if (!projectId) throw new Error(`Project not found: ${input.project_id}`);
+  const at = nowIso();
+  const row = {
+    id: input.id ?? makeId("context"),
+    context_key: contextKey,
+    project_id: projectId,
+    default_tab: normalizeDefaultTab(input.default_tab),
+    harness: nonEmptyString(input.harness),
+    workspace_name: nonEmptyString(input.workspace_name),
+    cwd: nonEmptyString(input.cwd),
+    repo_remote: normalizeRepoRemote(input.repo_remote),
+    branch: nonEmptyString(input.branch),
+    thread_id: nonEmptyString(input.thread_id),
+    metadata: json(input.metadata ?? {}),
+    source: input.source ?? "local",
+    created_at: input.created_at ?? at,
+    updated_at: input.updated_at ?? at,
+  };
+  db.prepare(`
+    INSERT INTO context_bindings (id, context_key, project_id, default_tab, harness, workspace_name, cwd, repo_remote, branch, thread_id, metadata, source, created_at, updated_at)
+    VALUES (@id, @context_key, @project_id, @default_tab, @harness, @workspace_name, @cwd, @repo_remote, @branch, @thread_id, @metadata, @source, @created_at, @updated_at)
+    ON CONFLICT(context_key) DO UPDATE SET
+      project_id=excluded.project_id,
+      default_tab=excluded.default_tab,
+      harness=excluded.harness,
+      workspace_name=excluded.workspace_name,
+      cwd=excluded.cwd,
+      repo_remote=excluded.repo_remote,
+      branch=excluded.branch,
+      thread_id=excluded.thread_id,
+      metadata=excluded.metadata,
+      source=excluded.source,
+      updated_at=excluded.updated_at
+  `).run(row);
+  return getContextBinding(contextKey);
+}
+
+export function getContextBinding(contextKey: string) {
+  const row = db.prepare(`
+    SELECT cb.*, p.name AS project_name
+    FROM context_bindings cb
+    JOIN projects p ON p.id = cb.project_id
+    WHERE (cb.context_key = @id OR cb.id = @id)
+      AND p.archived_at IS NULL
+  `).get({ id: contextKey });
+  return row ? hydrateContextBinding(row) : null;
+}
+
+export function listContextBindings(filters: ContextBindingFilters = {}) {
+  const where = ["p.archived_at IS NULL"];
+  const params: Record<string, unknown> = { limit: boundedNumber(filters.limit, 50, 1, 250) };
+  if (filters.context_key) {
+    where.push("cb.context_key = @context_key");
+    params.context_key = filters.context_key;
+  }
+  if (filters.project_id) {
+    const projectId = resolveProjectId(filters.project_id);
+    if (!projectId) throw new Error(`Project not found: ${filters.project_id}`);
+    where.push("cb.project_id = @project_id");
+    params.project_id = projectId;
+  }
+  for (const key of ["harness", "cwd", "thread_id"] as const) {
+    const value = nonEmptyString(filters[key]);
+    if (!value) continue;
+    where.push(`cb.${key} = @${key}`);
+    params[key] = value;
+  }
+  const repoRemote = normalizeRepoRemote(filters.repo_remote);
+  if (repoRemote) {
+    where.push("cb.repo_remote = @repo_remote");
+    params.repo_remote = repoRemote;
+  }
+  const branch = nonEmptyString(filters.branch);
+  if (branch) {
+    where.push("cb.branch = @branch");
+    params.branch = branch;
+  }
+  return db.prepare(`
+    SELECT cb.*, p.name AS project_name
+    FROM context_bindings cb
+    JOIN projects p ON p.id = cb.project_id
+    WHERE ${where.join(" AND ")}
+    ORDER BY cb.updated_at DESC
+    LIMIT @limit
+  `).all(params).map(hydrateContextBinding);
+}
+
+export function resolveContextProject(filters: ContextBindingFilters) {
+  const binding = findContextBinding(filters);
+  if (!binding) return { binding: null, project: null, url_path: null };
+  const project = db.prepare("SELECT * FROM projects WHERE id = @id AND archived_at IS NULL").get({ id: binding.project_id }) ?? null;
+  return { binding, project, url_path: contextBindingUrlPath(binding) };
+}
+
+export function deleteContextBinding(input: { id?: string; context_key?: string }) {
+  const locator = nonEmptyString(input.id) ?? nonEmptyString(input.context_key);
+  if (!locator) throw new Error("delete_context_binding requires id or context_key");
+  const binding = getContextBinding(locator);
+  if (!binding) return { deleted: false, binding: null };
+  db.prepare("DELETE FROM context_bindings WHERE id = @id").run({ id: binding.id });
+  return { deleted: true, binding };
+}
+
+function findContextBinding(filters: ContextBindingFilters) {
+  const exactKey = nonEmptyString(filters.context_key);
+  if (exactKey) return getContextBinding(exactKey);
+  const candidates: ContextBindingFilters[] = [];
+  const threadId = nonEmptyString(filters.thread_id);
+  if (threadId) candidates.push({ thread_id: threadId });
+  const cwd = nonEmptyString(filters.cwd);
+  if (cwd) candidates.push({ cwd });
+  const repoRemote = normalizeRepoRemote(filters.repo_remote);
+  const branch = nonEmptyString(filters.branch);
+  if (repoRemote && branch) candidates.push({ repo_remote: repoRemote, branch });
+  if (repoRemote) candidates.push({ repo_remote: repoRemote });
+  const harness = nonEmptyString(filters.harness);
+  if (harness && cwd) candidates.push({ harness, cwd });
+  if (harness && repoRemote) candidates.push({ harness, repo_remote: repoRemote });
+  for (const candidate of candidates) {
+    const [binding] = listContextBindings({ ...candidate, limit: 1 });
+    if (binding) return binding;
+  }
+  return null;
+}
+
+function hydrateContextBinding(row: unknown): Record<string, unknown> & { id: string; project_id: string; metadata: unknown; url_path: string } {
+  const item = row as Record<string, unknown>;
+  return {
+    ...item,
+    id: String(item.id),
+    project_id: String(item.project_id),
+    metadata: parseJson(item.metadata as string | null | undefined, {}),
+    url_path: contextBindingUrlPath(item),
+  };
+}
+
+function contextBindingUrlPath(binding: Record<string, unknown>) {
+  const projectId = encodeURIComponent(String(binding.project_id));
+  const tab = normalizeDefaultTab(binding.default_tab);
+  return `/projects/${projectId}/${tab}`;
+}
+
+function normalizeDefaultTab(value: unknown) {
+  const tab = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return ["overview", "activity", "issues"].includes(tab) ? tab : "issues";
+}
+
+function normalizedRequiredString(value: unknown, field: string) {
+  const normalized = nonEmptyString(value);
+  if (!normalized) throw new Error(`${field} is required`);
+  if (normalized.length > 500) throw new Error(`${field} is too long`);
+  return normalized;
+}
+
+function normalizeRepoRemote(value: unknown) {
+  const remote = nonEmptyString(value);
+  if (!remote) return null;
+  try {
+    const parsed = new URL(remote);
+    parsed.username = "";
+    parsed.password = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return remote.replace(/\/\/[^/@\s]+:[^/@\s]+@/, "//");
+  }
 }
 
 export function listIssues(filters: ListIssueFilters) {

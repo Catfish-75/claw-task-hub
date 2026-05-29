@@ -224,7 +224,7 @@ try {
   const tools = runHub("tools/list");
   assert(!tools.tools.includes("import_linear"), "import_linear must not be exposed to normal harness tools");
   assert(!tools.tools.includes("backfill_linear_descriptions"), "backfill_linear_descriptions must not be exposed to normal harness tools");
-  for (const name of ["dashboard", "list_projects", "save_project", "save_issue", "get_issue", "save_comment", "start_agent_session", "claim_issue", "release_issue_claim"]) {
+  for (const name of ["dashboard", "list_projects", "save_project", "save_issue", "get_issue", "save_comment", "start_agent_session", "claim_issue", "release_issue_claim", "save_context_binding", "resolve_context_project"]) {
     assert(tools.tools.includes(name), `expected harness tool is missing: ${name}`);
   }
   const mcpTools = runMcpToolsList();
@@ -235,6 +235,9 @@ try {
   assert(saveIssueSchema?.allow_no_project?.type === "boolean", "MCP save_issue schema does not advertise allow_no_project:boolean");
   const releaseClaimSchema = mcpTools.find((tool) => tool.name === "release_issue_claim")?.inputSchema?.properties;
   assert(releaseClaimSchema?.claim_id?.type === "string", "MCP release_issue_claim schema does not advertise claim_id:string");
+  const saveContextBindingSchema = mcpTools.find((tool) => tool.name === "save_context_binding")?.inputSchema;
+  assert(saveContextBindingSchema?.required?.includes("context_key"), "MCP save_context_binding schema does not require context_key");
+  assert(saveContextBindingSchema?.properties?.project_id?.type === "string", "MCP save_context_binding schema does not advertise project_id:string");
 
   const dashboard = runHub("tools/call", "dashboard");
   assert(dashboard.counts.projects === 0, "fresh harness DB should start with no projects");
@@ -247,6 +250,32 @@ try {
   assert(project.id, "save_project did not return an id");
   const projects = runHub("tools/call", "list_projects").projects;
   assert(projects.some((item) => item.id === project.id), "list_projects did not return the saved project");
+  const contextBinding = runHub("tools/call", "save_context_binding", {
+    context_key: "codex:harness-smoke",
+    project_id: project.id,
+    default_tab: "issues",
+    harness: "codex",
+    workspace_name: "Harness Smoke",
+    cwd: "C:/work/claw-task-hub",
+    repo_remote: "https://user:secret@example.com/Catfish-75/claw-task-hub.git",
+    branch: "main",
+    thread_id: "thread-harness-smoke",
+    metadata: { smoke: true },
+  }).binding;
+  assert(contextBinding.project_id === project.id, "save_context_binding returned the wrong project");
+  assert(contextBinding.url_path === `/projects/${encodeURIComponent(project.id)}/issues`, `save_context_binding returned the wrong URL path: ${contextBinding.url_path}`);
+  assert(!String(contextBinding.repo_remote).includes("secret"), "save_context_binding leaked repository credentials");
+  const resolvedContext = runHub("tools/call", "resolve_context_project", {
+    repo_remote: "https://other:credential@example.com/Catfish-75/claw-task-hub.git",
+    branch: "main",
+  });
+  assert(resolvedContext.project?.id === project.id, "resolve_context_project did not map repo_remote+branch to the saved project");
+  const listedContextBindings = runHub("tools/call", "list_context_bindings", { harness: "codex" }).bindings;
+  assert(listedContextBindings.some((binding) => binding.id === contextBinding.id), "list_context_bindings did not include the saved context binding");
+  const fetchedContextBinding = runHub("tools/call", "get_context_binding", { context_key: "codex:harness-smoke" }).binding;
+  assert(fetchedContextBinding.id === contextBinding.id, "get_context_binding(context_key) returned the wrong binding");
+  const deletedContextBinding = runHub("tools/call", "delete_context_binding", { context_key: "codex:harness-smoke" });
+  assert(deletedContextBinding.deleted === true, "delete_context_binding did not delete the saved binding");
 
   const missingProjectFailure = runHubExpectFailure("save_issue", {
     title: "Harness issue without project must fail",

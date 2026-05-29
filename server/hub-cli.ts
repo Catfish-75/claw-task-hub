@@ -1,4 +1,26 @@
-import { claimIssue, dashboard, endAgentSession, getIssue, heartbeatAgentSession, listAgentSessions, listIssueClaims, listIssues, listProjects, listTeams, releaseIssueClaim, repairIssueInvariants, saveComment, startAgentSession, upsertIssue, upsertProject } from "./store.js";
+import {
+  claimIssue,
+  dashboard,
+  deleteContextBinding,
+  endAgentSession,
+  getContextBinding,
+  getIssue,
+  heartbeatAgentSession,
+  listAgentSessions,
+  listContextBindings,
+  listIssueClaims,
+  listIssues,
+  listProjects,
+  listTeams,
+  releaseIssueClaim,
+  repairIssueInvariants,
+  resolveContextProject,
+  saveComment,
+  startAgentSession,
+  upsertContextBinding,
+  upsertIssue,
+  upsertProject,
+} from "./store.js";
 
 const [, , mode, ...args] = process.argv;
 
@@ -61,6 +83,12 @@ try {
         "release_issue_claim",
         "list_issue_claims",
         "repair_issue_invariants",
+        "save_context_binding",
+        "upsert_context_binding",
+        "get_context_binding",
+        "list_context_bindings",
+        "resolve_context_project",
+        "delete_context_binding",
       ],
     });
   } else if (mode === "tools/call") {
@@ -70,6 +98,15 @@ try {
     else if (tool === "list_projects") print({ projects: listProjects() });
     else if (tool === "save_project") print({ project: upsertProject(input) });
     else if (tool === "list_issues") print({ issues: listIssues(input) });
+    else if (tool === "save_context_binding" || tool === "upsert_context_binding") print({ binding: upsertContextBinding(input) });
+    else if (tool === "get_context_binding") {
+      const locator = typeof input.context_key === "string" && input.context_key ? input.context_key : input.id;
+      if (typeof locator !== "string" || !locator) throw new Error("get_context_binding requires id or context_key");
+      print({ binding: getContextBinding(locator) });
+    }
+    else if (tool === "list_context_bindings") print({ bindings: listContextBindings(input) });
+    else if (tool === "resolve_context_project") print(resolveContextProject(input));
+    else if (tool === "delete_context_binding") print(deleteContextBinding(input));
     else if (tool === "get_issue") {
       requireString(input, "id", "get_issue");
       print({ issue: getIssue(input.id) });
