@@ -18,6 +18,33 @@ This document is the canonical contract for agents and harness authors.
 - Harnesses should connect through local stdio MCP or local HTTP only unless the operator has added separate authentication and network controls.
 - The browser UI expects the local API unless a downstream distribution intentionally changes that deployment model.
 
+## Controlled Pilot Startup
+
+For interactive development, `npm run dev` is enough. For a controlled pilot on Linux or macOS, harnesses should not launch `npm run dev` through plain `nohup`: some parent shells still terminate the process tree when the shell exits.
+
+Use the supplied detached pilot launcher:
+
+```bash
+npm run pilot:start
+npm run pilot:status
+npm run pilot:stop
+```
+
+Launcher behavior:
+
+- prefers `setsid` to detach the server from the parent shell;
+- falls back to `nohup` only when `setsid` is unavailable;
+- writes logs and the PID file under `logs/`;
+- waits for both UI and API readiness;
+- stops the process group first, then the parent PID if needed.
+
+Optional environment overrides:
+
+- `CLAW_TASK_HUB_LOG_DIR`
+- `CLAW_TASK_HUB_PID_FILE`
+- `CLAW_TASK_HUB_UI_URL`
+- `CLAW_TASK_HUB_API_URL`
+
 ## Identity Model
 
 Each issue has three identity fields:

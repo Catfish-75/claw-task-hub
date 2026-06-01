@@ -9,6 +9,10 @@
     "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch server/index.ts",
     "dev:web": "vite",
+    "pilot:start": "sh scripts/clawtaskhub-posix.sh start",
+    "pilot:stop": "sh scripts/clawtaskhub-posix.sh stop",
+    "pilot:status": "sh scripts/clawtaskhub-posix.sh status",
+    "pilot:restart": "sh scripts/clawtaskhub-posix.sh restart",
     "api": "tsx server/index.ts",
     "seed": "tsx server/seed.ts",
     "hub": "tsx server/hub-cli.ts",
@@ -19,6 +23,7 @@
     "lint": "eslint .",
     "store-regression": "tsx tests/store-regression.mjs",
     "harness-smoke": "node tests/harness-smoke.mjs",
+    "posix-launcher-smoke": "node tests/posix-launcher-smoke.mjs",
     "ui-smoke": "playwright install chromium && node tests/ui-smoke.mjs",
     "public-hygiene": "node tests/public-hygiene.mjs",
     "preview": "vite preview"

@@ -41,6 +41,9 @@ jobs:
       - name: Harness smoke
         run: npm run harness-smoke
 
+      - name: POSIX launcher smoke
+        run: npm run posix-launcher-smoke
+
       - name: UI smoke
         run: npm run ui-smoke
 

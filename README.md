@@ -28,6 +28,16 @@ Open the UI:
 http://localhost:5173
 ```
 
+For a controlled pilot on Linux or macOS, do not background `npm run dev` with plain `nohup`. Some shells and harnesses still terminate the child process when the parent shell exits. Use the supplied detached launcher instead:
+
+```bash
+npm run pilot:start
+npm run pilot:status
+npm run pilot:stop
+```
+
+The pilot launcher prefers `setsid`, writes logs under `logs/`, records a PID file, waits for UI/API readiness, and stops the whole process group so the API and Vite server do not become orphaned.
+
 Check the local API:
 
 ```powershell

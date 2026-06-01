@@ -16,6 +16,7 @@ The system should be useful to MCP-compatible clients, CLIs, and agent-driven de
 - Local REST API supports health, dashboard, teams, projects, issue list, issue detail, issue create, and comments.
 - Local tool CLI exposes stable issue-tracker names: `list_projects`, `save_project`, `list_issues`, `get_issue`, `save_issue`, `save_comment`, `list_teams`.
 - Harness context bindings map a repository, working directory, thread, or context key to the correct project.
+- Controlled pilot startup on Linux/macOS has a documented detached launcher with start, status, stop, and restart commands.
 - UI deep links open project overview, activity, issues, individual issues, workspace issues, and context-bound project pages after refresh.
 - UI supports project filtering, status filtering, indexed search, list/detail flow, quick local issue creation, and comments.
 - Cloud/MCP outage leaves local read/write flows usable and visible as degraded mode.
@@ -36,6 +37,7 @@ The system should be useful to MCP-compatible clients, CLIs, and agent-driven de
 - API health returns OK on `http://127.0.0.1:4781/api/health`.
 - CLI smoke passes with `npm run hub -- tools/call dashboard "{}"`.
 - Store regression passes with `npm run store-regression`.
+- POSIX launcher smoke passes with `npm run posix-launcher-smoke`.
 - UI smoke passes with `npm run ui-smoke`.
 - Public hygiene passes with `npm run public-hygiene`.
 - Reviewer-opponent approves MVP direction before expanding import breadth.
