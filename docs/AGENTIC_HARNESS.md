@@ -131,6 +131,20 @@ UI deep links:
 
 When MCP tools are not injected, run commands from the repository root.
 
+PowerShell rule: never pass raw JSON to `tools/call` when the payload contains human-written text, Markdown, quotes, or newlines. Do not retry by hand-escaping quotes. Use `base64:<json>` or the wrapper below:
+
+```powershell
+$payload = @{
+  issue_id = "CTH-267"
+  body = @'
+Accepted: comments can contain "quotes", `ticks`, and multiple lines.
+'@
+  author = "Demo Agent"
+  source = "local"
+}
+.\tools\cth-call.ps1 -Tool save_comment -InputObject $payload
+```
+
 Dashboard:
 
 ```powershell

@@ -20,3 +20,4 @@
 - Use visible issue identifiers such as `CTH-272`, `LOCAL-1`, or imported historical identifiers in conversation and tool calls.
 - New issues must be filed under an explicit owning project id from `list_projects`; never infer or copy a default project id from unrelated examples.
 - Do not store secrets in issues, comments, docs, tests, fixtures, or screenshots.
+- In PowerShell, do not pass raw JSON to `npm run hub -- tools/call` when payloads contain comments, Markdown, quotes, backticks, or newlines. Use `base64:<json>` or `.\tools\cth-call.ps1 -Tool <tool> -InputObject $payload` instead of hand-escaping quotes.

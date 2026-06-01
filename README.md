@@ -34,6 +34,20 @@ Check the local API:
 npm run hub -- tools/call dashboard "{}"
 ```
 
+PowerShell note: for any payload that contains human text, Markdown, quotes, or newlines, do not pass raw JSON directly to `tools/call`. Use the `base64:<json>` transport shown below, or use the wrapper:
+
+```powershell
+$payload = @{
+  issue_id = "demo-agent-issue"
+  body = @'
+Accepted: quotes like "this" and Markdown `ticks` are safe here.
+'@
+  author = "Demo Agent"
+  source = "local"
+}
+.\tools\cth-call.ps1 -Tool save_comment -InputObject $payload
+```
+
 The API binds to `127.0.0.1:4781` by default. This is intentional: Claw Task Hub is a local app, not a public network service.
 
 ## First Agent Workflow
