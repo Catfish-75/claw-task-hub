@@ -210,6 +210,21 @@ function writeShortcut(cwd: string, shortcutName: string, url: string) {
   return shortcutPath;
 }
 
+function writeMarkdownShortcut(cwd: string, url: string, projectName: string) {
+  mkdirSync(cwd, { recursive: true });
+  const markdownPath = resolve(cwd, "OPEN_CLAW_TASK_HUB.md");
+  writeFileSync(
+    markdownPath,
+    `# Open Claw Task Hub\n\n` +
+      `Project: ${projectName}\n\n` +
+      `Open this project in Claw Task Hub:\n\n` +
+      `[Open Claw Task Hub project](${url})\n\n` +
+      `Use this file when your agentic harness does not show Claw Task Hub in its local app picker.\n`,
+    "utf8",
+  );
+  return markdownPath;
+}
+
 function openUrl(url: string) {
   const command = process.platform === "win32" ? process.env.ComSpec ?? "cmd.exe" : process.platform === "darwin" ? "open" : "xdg-open";
   const args = process.platform === "win32" ? ["/d", "/s", "/c", "start", "", url] : [url];
@@ -237,6 +252,7 @@ try {
   const urlPath = resolution.url_path ?? projectUrlPath(project.id, options.tab);
   const url = fullUrl(options.baseUrl, urlPath);
   const shortcutPath = options.writeShortcut ? writeShortcut(cwd, options.shortcutName, url) : null;
+  const shortcutMarkdownPath = options.writeShortcut ? writeMarkdownShortcut(cwd, url, project.name ?? project.id) : null;
   if (options.open) openUrl(url);
 
   process.stdout.write(`${JSON.stringify({
@@ -248,6 +264,7 @@ try {
     url_path: urlPath,
     url,
     shortcut_path: shortcutPath,
+    shortcut_markdown_path: shortcutMarkdownPath,
     opened: options.open,
   }, null, 2)}\n`);
 } catch (error) {

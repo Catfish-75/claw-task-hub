@@ -40,6 +40,11 @@ try {
   assert(first.shortcut_path, "shortcut path was not returned");
   assert(existsSync(first.shortcut_path), "shortcut was not written");
   assert(readFileSync(first.shortcut_path, "utf8").includes(first.url), "shortcut does not contain the project URL");
+  assert(first.shortcut_markdown_path, "markdown shortcut path was not returned");
+  assert(existsSync(first.shortcut_markdown_path), "markdown shortcut was not written");
+  const markdownShortcut = readFileSync(first.shortcut_markdown_path, "utf8");
+  assert(markdownShortcut.includes("[Open Claw Task Hub project]"), "markdown shortcut does not contain a clickable link label");
+  assert(markdownShortcut.includes(first.url), "markdown shortcut does not contain the project URL");
 
   const second = runOpenContext([
     "--cwd", workspaceDir,

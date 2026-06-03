@@ -2,6 +2,8 @@
 logs
 *.log
 .codex-tmp-*
+OPEN_CLAW_TASK_HUB.md
+Open Claw Task Hub.url
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

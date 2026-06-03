@@ -27,6 +27,7 @@ Humans should not need to type commands for normal use.
 - On a project page, click the `Shortcut` button in the header to download a project-specific `.url` shortcut.
 - Save that shortcut next to the local repository, on the desktop, or in a bookmarks folder.
 - Reopen the project later by double-clicking the shortcut.
+- If a harness local-app picker does not show Claw Task Hub, open `OPEN_CLAW_TASK_HUB.md` from the workspace files and click `Open Claw Task Hub project`.
 
 This is the preferred human-facing path. CLI launchers and MCP calls are for agents, harnesses, automation, and troubleshooting.
 
@@ -141,7 +142,7 @@ Open an already-bound workspace:
 npm run codex:open -- --cwd C:/work/my-repo
 ```
 
-The command returns JSON with the resolved `url`, `url_path`, `project`, and `context_key`. Agents can read that URL and hand it to the harness browser. Humans can use the generated `Open Claw Task Hub.url` shortcut. Other harnesses can use the same command by changing `--harness`.
+The command returns JSON with the resolved `url`, `url_path`, `project`, and `context_key`. Agents can read that URL and hand it to the harness browser. Humans can use the generated `Open Claw Task Hub.url` shortcut or the generated `OPEN_CLAW_TASK_HUB.md` file when a harness exposes project files more reliably than local-app suggestions. Other harnesses can use the same command by changing `--harness`.
 
 A context binding can include:
 

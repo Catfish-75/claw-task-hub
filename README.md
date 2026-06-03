@@ -33,6 +33,8 @@ To create a one-click shortcut for a specific project:
 3. Save the downloaded `.url` shortcut in the project folder, desktop, or bookmarks folder.
 4. Use that shortcut next time to open directly to the project issues page.
 
+If your agentic harness has a "local apps" picker and Claw Task Hub is not listed there, use the workspace file fallback instead. Open `OPEN_CLAW_TASK_HUB.md` from the workspace files and click `Open Claw Task Hub project`.
+
 ### Advanced command-line launch
 
 Agentic harnesses and developers can still install and run Claw Task Hub from a shell:
@@ -199,7 +201,7 @@ Open an already-bound Codex workspace:
 npm run codex:open -- --cwd C:/work/demo-agent-project
 ```
 
-The command prints JSON with `url`, `url_path`, `project`, and `context_key`. With `--write-shortcut`, it also writes `Open Claw Task Hub.url` into the workspace so a human or agent can open the right project in one click later.
+The command prints JSON with `url`, `url_path`, `project`, and `context_key`. With `--write-shortcut`, it writes both `Open Claw Task Hub.url` and `OPEN_CLAW_TASK_HUB.md` into the workspace so a human or agent can open the right project later even when a local-app picker does not list Claw Task Hub.
 
 Create a binding:
 
