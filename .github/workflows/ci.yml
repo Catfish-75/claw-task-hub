@@ -41,6 +41,9 @@ jobs:
       - name: Harness smoke
         run: npm run harness-smoke
 
+      - name: Open context smoke
+        run: npm run open-context-smoke
+
       - name: POSIX launcher smoke
         run: npm run posix-launcher-smoke
 

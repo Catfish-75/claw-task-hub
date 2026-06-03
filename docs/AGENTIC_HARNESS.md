@@ -107,6 +107,30 @@ Agents must not:
 
 Harnesses should bind their local execution context to a Claw Task Hub project once, then resolve that binding on every new or resumed session. This prevents agents from filing work into the wrong project and lets the UI open directly to the correct project after a browser refresh.
 
+### Codex Workspace Launcher
+
+Codex users should not rely on opening bare `http://localhost:5173` from the side panel. That URL is intentionally the global Projects page. Use the workspace launcher so Codex opens the project that matches the current working directory.
+
+Create a local project for a workspace, bind it, write a shortcut, and open the UI:
+
+```powershell
+npm run open:context -- --harness codex --cwd C:/work/my-repo --project-name "My Repo" --create-project --write-shortcut --open
+```
+
+Bind an existing Claw Task Hub project:
+
+```powershell
+npm run open:context -- --harness codex --cwd C:/work/my-repo --project-id project_my_repo --write-shortcut --open
+```
+
+Open an already-bound workspace:
+
+```powershell
+npm run codex:open -- --cwd C:/work/my-repo
+```
+
+The command returns JSON with the resolved `url`, `url_path`, `project`, and `context_key`. Agents can read that URL and hand it to the harness browser. Humans can use the generated `Open Claw Task Hub.url` shortcut. Other harnesses can use the same command by changing `--harness`.
+
 A context binding can include:
 
 - `context_key`: a stable harness-defined key, for example `codex:C:/work/my-repo` or `claude-code:repo:example/my-repo`.

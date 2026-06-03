@@ -156,6 +156,28 @@ npm run mcp
 
 Claw Task Hub supports durable project bindings for agentic harnesses. A binding maps a local context, such as a repository, working directory, thread id, or harness-specific key, to the project that should open by default.
 
+For Codex and similar local harnesses, use the launcher command instead of opening bare `http://localhost:5173`. Bare localhost opens the global Projects page; the launcher resolves the current workspace and opens the project-specific URL.
+
+Create a local project, bind a workspace, write a shortcut, and open the UI:
+
+```powershell
+npm run open:context -- --harness codex --cwd C:/work/demo-agent-project --project-name "Demo Agent Project" --create-project --write-shortcut --open
+```
+
+Bind an existing project and open it:
+
+```powershell
+npm run open:context -- --harness codex --cwd C:/work/demo-agent-project --project-id demo-agent-project --write-shortcut --open
+```
+
+Open an already-bound Codex workspace:
+
+```powershell
+npm run codex:open -- --cwd C:/work/demo-agent-project
+```
+
+The command prints JSON with `url`, `url_path`, `project`, and `context_key`. With `--write-shortcut`, it also writes `Open Claw Task Hub.url` into the workspace so a human or agent can open the right project in one click later.
+
 Create a binding:
 
 ```powershell
