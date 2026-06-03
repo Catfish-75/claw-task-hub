@@ -16,6 +16,7 @@ The system should be useful to MCP-compatible clients, CLIs, and agent-driven de
 - Local REST API supports health, dashboard, teams, projects, issue list, issue detail, issue create, and comments.
 - Local tool CLI exposes stable issue-tracker names: `list_projects`, `save_project`, `list_issues`, `get_issue`, `save_issue`, `save_comment`, `list_teams`.
 - Harness context bindings map a repository, working directory, thread, or context key to the correct project.
+- Humans can start the local app and reopen a specific project with one-click desktop shortcuts, without typing commands.
 - Controlled pilot startup on Linux/macOS has a documented detached launcher with start, status, stop, and restart commands.
 - UI deep links open project overview, activity, issues, individual issues, workspace issues, and context-bound project pages after refresh.
 - UI supports project filtering, status filtering, indexed search, list/detail flow, quick local issue creation, and comments.

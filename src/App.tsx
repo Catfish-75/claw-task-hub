@@ -525,6 +525,11 @@ function App() {
       .filter((group) => group.items.length);
   }, [filteredIssues, sourceIssueGroups, statusMode, trimmedQuery]);
 
+  function downloadProjectShortcut() {
+    if (!projectDetail?.project) return;
+    downloadShortcut(projectDetail.project, "issues");
+  }
+
   return (
     <main className="linear-shell">
       <TopChrome />
@@ -536,6 +541,7 @@ function App() {
           onProjects={openProjectsPage}
           onWorkspace={openWorkspacePage}
           onTab={changeTab}
+          onProjectShortcut={downloadProjectShortcut}
         />
 
         {page === "projects" ? (
@@ -614,6 +620,7 @@ function HeaderBar({
   onProjects,
   onWorkspace,
   onTab,
+  onProjectShortcut,
 }: {
   page: AppPage;
   tab: ProjectTab;
@@ -621,6 +628,7 @@ function HeaderBar({
   onProjects: () => void;
   onWorkspace: () => void;
   onTab: (tab: ProjectTab) => void;
+  onProjectShortcut: () => void;
 }) {
   const showProjectTabs = page === "project";
   return (
@@ -641,7 +649,15 @@ function HeaderBar({
         <button className="ghost-icon"><Star size={15} /></button>
         <button className="ghost-icon"><MoreHorizontal size={17} /></button>
         <div className="crumb-actions">
-          <button className="ghost-icon"><Link size={15} /></button>
+          <button
+            className="ghost-icon"
+            disabled={!project}
+            title="Download project shortcut"
+            aria-label="Download project shortcut"
+            onClick={onProjectShortcut}
+          >
+            <Link size={15} />
+          </button>
           <button className="ghost-icon"><Bell size={15} /></button>
           <button className="ghost-icon"><Plus size={16} /></button>
         </div>
@@ -972,6 +988,32 @@ function currentRoutePath(input: {
 
 function projectRoutePath(projectId: string, tab: ProjectTab = "overview", options: Partial<Pick<RouteDescriptor, "query" | "statusMode" | "issueDisplayLimit">> = {}) {
   return `/projects/${encodeURIComponent(projectId)}/${tab}${routeQuery(options)}`;
+}
+
+function downloadShortcut(project: Project, tab: ProjectTab) {
+  const url = `${window.location.origin}${projectRoutePath(project.id, tab)}`;
+  const body = `[InternetShortcut]\r\nURL=${url}\r\n`;
+  const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = `Open Claw Task Hub - ${safeFileName(project.name)}.url`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+function safeFileName(value: string) {
+  return (
+    value
+      .replace(/[<>:"/\\|?*]/g, "-")
+      .split("")
+      .filter((char) => char.charCodeAt(0) >= 32)
+      .join("")
+      .replace(/\s+/g, " ")
+      .trim() || "Project"
+  );
 }
 
 function workspaceRoutePath(options: Partial<Pick<RouteDescriptor, "query" | "statusMode" | "issueDisplayLimit">> = {}) {

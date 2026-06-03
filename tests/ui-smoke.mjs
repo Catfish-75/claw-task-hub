@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,7 +17,8 @@ const env = {
 };
 const spawned = [];
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
+const context = await browser.newContext({ viewport: { width: 1280, height: 960 }, acceptDownloads: true });
+const page = await context.newPage();
 const pageDiagnostics = [];
 
 page.on("console", (message) => {
@@ -300,6 +301,21 @@ assert(await page.getByRole("button", { name: "Activity", exact: true }).isVisib
 assert(await page.getByRole("button", { name: "Issues", exact: true }).isVisible(), "Issues tab is missing");
 assert(await page.getByText("Properties").isVisible(), "Overview properties are missing");
 assert(await page.getByText("Resources").isVisible(), "Overview resources are missing");
+const [shortcutDownload] = await Promise.all([
+  page.waitForEvent("download"),
+  page.getByRole("button", { name: "Download project shortcut" }).click(),
+]);
+assert(
+  shortcutDownload.suggestedFilename() === "Open Claw Task Hub - Claw Task Hub MVP.url",
+  `Unexpected project shortcut filename: ${shortcutDownload.suggestedFilename()}`,
+);
+const shortcutPath = await shortcutDownload.path();
+assert(shortcutPath, "Project shortcut download did not produce a local file path");
+const shortcutBody = readFileSync(shortcutPath, "utf8");
+assert(
+  shortcutBody.includes(`URL=http://127.0.0.1:${webPort}/projects/project_claw_task_hub_mvp/issues`),
+  `Project shortcut points to the wrong URL: ${shortcutBody}`,
+);
 await page.screenshot({ path: "test-results/linearish-project-overview.png", fullPage: true });
 
 await page.getByRole("button", { name: "Activity", exact: true }).click();

@@ -13,19 +13,35 @@ Prerequisites:
 - Node.js 24 or newer
 - npm
 
-Install and run:
+### No-command desktop launch
+
+Download the repository from GitHub, extract it, then start Claw Task Hub from the repository folder:
+
+- Windows: double-click `Launch Claw Task Hub.vbs`.
+- macOS/Linux: double-click `Launch Claw Task Hub.command` where your file manager supports executable command files.
+
+On the first launch, the launcher installs dependencies if needed, starts the local API and UI in the background, and opens the browser at:
+
+```text
+http://localhost:5173
+```
+
+To create a one-click shortcut for a specific project:
+
+1. Open the project in Claw Task Hub.
+2. Click the link icon in the project header.
+3. Save the downloaded `.url` shortcut in the project folder, desktop, or bookmarks folder.
+4. Use that shortcut next time to open directly to the project issues page.
+
+### Advanced command-line launch
+
+Agentic harnesses and developers can still install and run Claw Task Hub from a shell:
 
 ```powershell
 git clone https://github.com/Catfish-75/claw-task-hub.git
 cd claw-task-hub
 npm ci
 npm run dev
-```
-
-Open the UI:
-
-```text
-http://localhost:5173
 ```
 
 For a controlled pilot on Linux or macOS, do not background `npm run dev` with plain `nohup`. Some shells and harnesses still terminate the child process when the parent shell exits. Use the supplied detached launcher instead:
@@ -38,7 +54,7 @@ npm run pilot:stop
 
 The pilot launcher prefers `setsid`, writes logs under `logs/`, records a PID file, waits for UI/API readiness, and stops the whole process group so the API and Vite server do not become orphaned.
 
-Check the local API:
+Check the local API from a shell:
 
 ```powershell
 npm run hub -- tools/call dashboard "{}"
@@ -156,7 +172,14 @@ npm run mcp
 
 Claw Task Hub supports durable project bindings for agentic harnesses. A binding maps a local context, such as a repository, working directory, thread id, or harness-specific key, to the project that should open by default.
 
-For Codex and similar local harnesses, use the launcher command instead of opening bare `http://localhost:5173`. Bare localhost opens the global Projects page; the launcher resolves the current workspace and opens the project-specific URL.
+For humans, the simplest project-bound path is the UI shortcut:
+
+1. Open the project once in Claw Task Hub.
+2. Click the link icon in the project header.
+3. Save the generated `.url` file next to the local project or on the desktop.
+4. Double-click that file later to open the same project directly.
+
+For Codex and similar local harnesses, use a context binding instead of opening bare `http://localhost:5173`. Bare localhost opens the global Projects page; a binding resolves the current workspace and opens the project-specific URL.
 
 Create a local project, bind a workspace, write a shortcut, and open the UI:
 
