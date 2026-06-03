@@ -650,13 +650,14 @@ function HeaderBar({
         <button className="ghost-icon"><MoreHorizontal size={17} /></button>
         <div className="crumb-actions">
           <button
-            className="ghost-icon"
+            className="project-shortcut-button"
             disabled={!project}
             title="Download project shortcut"
             aria-label="Download project shortcut"
             onClick={onProjectShortcut}
           >
             <Link size={15} />
+            <span>Shortcut</span>
           </button>
           <button className="ghost-icon"><Bell size={15} /></button>
           <button className="ghost-icon"><Plus size={16} /></button>

@@ -24,7 +24,7 @@ Humans should not need to type commands for normal use.
 
 - On Windows, double-click `Launch Claw Task Hub.vbs` from the repository folder.
 - On macOS/Linux, double-click `Launch Claw Task Hub.command` where the desktop environment supports command files.
-- On a project page, click the link icon in the header to download a project-specific `.url` shortcut.
+- On a project page, click the `Shortcut` button in the header to download a project-specific `.url` shortcut.
 - Save that shortcut next to the local repository, on the desktop, or in a bookmarks folder.
 - Reopen the project later by double-clicking the shortcut.
 

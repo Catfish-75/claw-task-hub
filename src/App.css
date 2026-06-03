@@ -146,6 +146,24 @@ button:disabled {
   gap: 8px;
 }
 
+.project-shortcut-button {
+  align-items: center;
+  background: #1d1d1d;
+  border: 1px solid #303030;
+  border-radius: 999px;
+  color: var(--text);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 7px;
+  height: 30px;
+  padding: 0 11px;
+}
+
+.project-shortcut-button:hover {
+  background: var(--hover);
+}
+
 .view-tabs {
   height: 44px;
   border-bottom: 1px solid var(--line);

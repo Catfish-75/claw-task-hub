@@ -29,7 +29,7 @@ http://localhost:5173
 To create a one-click shortcut for a specific project:
 
 1. Open the project in Claw Task Hub.
-2. Click the link icon in the project header.
+2. Click the `Shortcut` button in the project header.
 3. Save the downloaded `.url` shortcut in the project folder, desktop, or bookmarks folder.
 4. Use that shortcut next time to open directly to the project issues page.
 
@@ -175,7 +175,7 @@ Claw Task Hub supports durable project bindings for agentic harnesses. A binding
 For humans, the simplest project-bound path is the UI shortcut:
 
 1. Open the project once in Claw Task Hub.
-2. Click the link icon in the project header.
+2. Click the `Shortcut` button in the project header.
 3. Save the generated `.url` file next to the local project or on the desktop.
 4. Double-click that file later to open the same project directly.
 
