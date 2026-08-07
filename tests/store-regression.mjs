@@ -13,6 +13,7 @@ function indexExists(database, name) {
 
 const tempDir = mkdtempSync(join(tmpdir(), "claw-task-hub-store-"));
 process.env.CLAW_TASK_HUB_DB = join(tempDir, "test.sqlite");
+let storeDb;
 
 try {
   const {
@@ -40,6 +41,7 @@ try {
     upsertTeam,
   } = await import("../server/store.ts");
   const { db, dbPath, initializeDatabase, resolveDbPath, runMigrations } = await import("../server/db.ts");
+  storeDb = db;
   assert(dbPath === process.env.CLAW_TASK_HUB_DB, `CLAW_TASK_HUB_DB did not select the test DB: ${dbPath}`);
   assert(
     resolveDbPath({ CODEX_TASK_HUB_DB: join(tempDir, "legacy-env.sqlite") }, false) === join(tempDir, "legacy-env.sqlite"),
@@ -137,6 +139,30 @@ try {
     existingMigrationDb.close();
   }
   ensureDefaultTeam();
+  const firstNullExternalTeam = upsertTeam({
+    id: "team_null_external_first",
+    name: "First Null External Team",
+  });
+  const secondNullExternalTeam = upsertTeam({
+    id: "team_null_external_second",
+    name: "Second Null External Team",
+  });
+  assert(firstNullExternalTeam.id === "team_null_external_first", "first null-external-id team returned the wrong row");
+  assert(secondNullExternalTeam.id === "team_null_external_second", "second null-external-id team returned the wrong row");
+  assert(secondNullExternalTeam.name === "Second Null External Team", "second null-external-id team returned the wrong name");
+
+  const firstNullExternalProject = upsertProject({
+    id: "project_null_external_first",
+    name: "First Null External Project",
+  });
+  const secondNullExternalProject = upsertProject({
+    id: "project_null_external_second",
+    name: "Second Null External Project",
+  });
+  assert(firstNullExternalProject.id === "project_null_external_first", "first null-external-id project returned the wrong row");
+  assert(secondNullExternalProject.id === "project_null_external_second", "second null-external-id project returned the wrong row");
+  assert(secondNullExternalProject.name === "Second Null External Project", "second null-external-id project returned the wrong name");
+
   const storeProject = upsertProject({
     id: "project_store_regression",
     external_id: "store-regression-project",
@@ -735,9 +761,9 @@ try {
   assert(secondRepair.completedAtFixed === 0, "repair is not idempotent for completed_at");
   assert(secondRepair.labelsFixed === 0, "repair is not idempotent for labels");
   assert(secondRepair.issuesChanged === 0, "repair is not idempotent for changed issue count");
-  db.close();
 } finally {
-  rmSync(tempDir, { recursive: true, force: true });
+  storeDb?.close();
+  rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }
 
 console.log("Store regression passed");

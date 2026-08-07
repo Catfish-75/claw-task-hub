@@ -182,7 +182,8 @@ export function upsertTeam(input: { id?: string; external_id?: string; name: str
     ON CONFLICT(external_id) DO UPDATE SET
       name=excluded.name, key=excluded.key, updated_at=excluded.updated_at
   `).run(row);
-  return db.prepare("SELECT * FROM teams WHERE external_id IS @external_id OR id = @id").get(row);
+  if (row.external_id) return db.prepare("SELECT * FROM teams WHERE external_id = @external_id").get(row);
+  return db.prepare("SELECT * FROM teams WHERE id = @id").get(row);
 }
 
 export function listProjects() {
@@ -299,7 +300,8 @@ export function upsertProject(input: {
       name=excluded.name, summary=excluded.summary, description=excluded.description, status=excluded.status,
       priority=excluded.priority, lead=excluded.lead, archived_at=excluded.archived_at, updated_at=excluded.updated_at
   `).run(row);
-  return db.prepare("SELECT * FROM projects WHERE external_id IS @external_id OR id = @id").get(row);
+  if (row.external_id) return db.prepare("SELECT * FROM projects WHERE external_id = @external_id").get(row);
+  return db.prepare("SELECT * FROM projects WHERE id = @id").get(row);
 }
 
 export function upsertContextBinding(input: ContextBindingInput) {
