@@ -2,7 +2,14 @@
 
 All notable changes to Claw Task Hub will be documented in this file.
 
-## Unreleased
+## 0.1.1 - 2026-10-07
+
+- Added Linux/Omarchy desktop-menu integration and one systemd user service, with opt-in login startup.
+- Added loopback-only built UI serving, bounded startup readiness, explicit shared database selection, and safe uninstall.
+- Added Linux lifecycle and cross-platform desktop contract tests, plus installation and MCP documentation.
+- Updated compatible dependencies and overrode the vulnerable shell-quote transitive pin; dependency audit reports no known vulnerabilities at release verification.
+
+## 0.1.0
 
 - Set the package version to `0.1.0` for the first public MVP release.
 - Added MIT license for public release preparation.

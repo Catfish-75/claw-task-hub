@@ -2,13 +2,23 @@
   "name": "claw-task-hub",
   "private": true,
   "description": "Local-first, Linear-like task hub for AI agents and agentic harnesses.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "type": "module",
+  "overrides": {
+    "concurrently": {
+      "shell-quote": "^1.12.0"
+    }
+  },
   "scripts": {
     "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch server/index.ts",
     "dev:web": "vite",
+    "linux:start": "concurrently --kill-others --success all \"npm:api\" \"vite preview --host 127.0.0.1 --port 5173 --strictPort\"",
+    "linux:install": "node tools/linux-desktop.mjs install",
+    "linux:uninstall": "node tools/linux-desktop.mjs uninstall",
+    "linux:open": "node tools/linux-desktop.mjs open",
+    "linux-desktop-smoke": "node --test tests/linux-desktop.test.mjs",
     "pilot:start": "sh scripts/clawtaskhub-posix.sh start",
     "pilot:stop": "sh scripts/clawtaskhub-posix.sh stop",
     "pilot:status": "sh scripts/clawtaskhub-posix.sh status",
