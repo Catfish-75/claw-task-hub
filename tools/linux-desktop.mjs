@@ -174,6 +174,7 @@ StartupNotify=false
   } else if (action === 'uninstall') {
     if (active()) ctl('stop', unit);
     if (existsSync(service)) ctl('disable', unit);
+    if (spawnSync('systemctl', ['--user', 'is-failed', '--quiet', unit]).status === 0) ctl('reset-failed', unit);
     for (const p of [service, desktop, settings]) rmSync(p, { force: true });
     ctl('daemon-reload');
     console.log('Desktop integration removed. Repository and database preserved.');
