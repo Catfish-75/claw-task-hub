@@ -47,6 +47,9 @@ jobs:
       - name: POSIX launcher smoke
         run: npm run posix-launcher-smoke
 
+      - name: Linux desktop contract
+        run: npm run linux-desktop-smoke
+
       - name: UI smoke
         run: npm run ui-smoke
 

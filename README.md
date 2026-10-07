@@ -10,7 +10,7 @@ Normal operation is independent of external ticketing services. Optional history
 
 Prerequisites:
 
-- Node.js 24 or newer
+- Node.js 24 LTS (required for the supported installation)
 - npm
 
 ### No-command desktop launch
@@ -18,9 +18,10 @@ Prerequisites:
 Download the repository from GitHub, extract it, then start Claw Task Hub from the repository folder:
 
 - Windows: double-click `Launch Claw Task Hub.vbs`.
-- macOS/Linux: double-click `Launch Claw Task Hub.command` where your file manager supports executable command files.
+- macOS: double-click `Launch Claw Task Hub.command` where your file manager supports executable command files.
+- Linux/Omarchy: use the desktop installation below.
 
-On the first launch, the launcher installs dependencies if needed, starts the local API and UI in the background, and opens the browser at:
+On Windows/macOS, the first launch installs dependencies if needed, starts the local API and UI in the background, and opens the browser at:
 
 ```text
 http://localhost:5173
@@ -35,6 +36,21 @@ To create a one-click shortcut for a specific project:
 
 If your agentic harness has a "local apps" picker and Claw Task Hub is not listed there, use the workspace file fallback instead. Open `OPEN_CLAW_TASK_HUB.md` from the workspace files and click `Open Claw Task Hub project`.
 
+### Linux / Omarchy desktop installation
+
+From the repository directory, use Node.js 24 LTS and npm. On Omarchy, select it locally with `mise use node@24`; do not change your global runtime. Node.js 26 is not supported by the locked native SQLite dependency.
+
+```bash
+npm ci
+npm run build
+npm run linux:install
+npm run linux:open
+```
+
+Installation creates an application-menu entry and a user systemd service but does not start it. Starting automatically at login is opt-in: use `npm run linux:install -- --autostart`. No `sudo` or user lingering is required. The menu launcher or `linux:open` starts the service and waits for API/UI readiness before opening the browser.
+
+See [Linux / Omarchy support](docs/LINUX.md) for prerequisites, foreground operation, logs, stopping, upgrades, uninstall, MCP configuration, and the tested support boundary.
+
 ### Advanced command-line launch
 
 Agentic harnesses and developers can still install and run Claw Task Hub from a shell:
@@ -46,7 +62,7 @@ npm ci
 npm run dev
 ```
 
-For a controlled pilot on Linux or macOS, do not background `npm run dev` with plain `nohup`. Some shells and harnesses still terminate the child process when the parent shell exits. Use the supplied detached launcher instead:
+For Linux desktop use, prefer the user service above. For a development pilot on Linux or macOS, do not background `npm run dev` with plain `nohup`. Some shells and harnesses still terminate the child process when the parent shell exits. Use the supplied detached launcher instead:
 
 ```bash
 npm run pilot:start
@@ -269,6 +285,7 @@ npm run public-hygiene
 
 ## Documentation
 
+- Linux / Omarchy support: [docs/LINUX.md](docs/LINUX.md)
 - Agent and harness contract: [docs/AGENTIC_HARNESS.md](docs/AGENTIC_HARNESS.md)
 - Optional history import from Linear: [docs/LINEAR_MIGRATION.md](docs/LINEAR_MIGRATION.md)
 - Launch kit and announcement drafts: [docs/LAUNCH.md](docs/LAUNCH.md)
